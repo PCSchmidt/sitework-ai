@@ -22,15 +22,16 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
 **Exit:** check script green; no contradictory numbers across the doc suite.
 
 ## M1 — Perception core (2–3 weeks)
-- [ ] **Spike-00 (first 2 days):** GPU benchmark probe → `docs/spikes/spike-00-gpu-benchmark.md`;
-      gates the S2 commitment and the YOLO11n→11s upgrade decision
+- [x] **Spike-00 (first 2 days):** GPU benchmark probe → `docs/spikes/spike-00-gpu-benchmark.md`;
+      done 2026-09-16: RTX A4500 16 GB, YOLO11s adopted as default, 1080p transcode required,
+      3-stream 22–26 FPS (TensorRT FP16 at M2 to clear S2)
 - [x] **Spike-02 (parallel):** forklift-class options measured → `docs/spikes/spike-02-forklift-class.md`;
       decided: ship the truck/bus → heavy_vehicle proxy for M1–M4; real-frame fine-tune at M5
 - [x] Dataset selection + `data/manifests/` (versions, licenses, SHA256) for the actual demo clips —
       done 2026-09-16: Mendeley machinery, HF warehouse, MOT17 mirror, Pexels demo set
       (see `docs/04-data-and-models.md` §1 for the verified source table)
 - [ ] Ingestion: MediaMTX MP4 looping; RTSP frame source (PyAV/GStreamer), decode benchmarks
-- [ ] `detector.py`: YOLO11n via Ultralytics → ONNX → TensorRT FP16 wrappers (11s/INT8 after spike-00)
+- [ ] `detector.py`: YOLO11s via Ultralytics → ONNX → TensorRT FP16 wrappers (11n fallback via config)
 - [ ] `tracker.py`: ByteTrack + per-track Kalman (position/velocity, covariance)
 - [ ] `pipeline.py`: decode→detect→track→TrackletFrame publisher (Redis XADD @10 Hz)
 - [ ] `evaluation/benchmark_models.py` v1 (single stream)

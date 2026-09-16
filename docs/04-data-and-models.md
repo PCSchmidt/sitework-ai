@@ -31,17 +31,17 @@ cameras in `config/cameras.yaml` — forklift/pedestrian interaction (dock), wor
 
 | Candidate | Why | Default? |
 | --- | --- | --- |
-| **YOLO11n** | COCO-pretrained person/vehicle classes; excellent FPS on modest/laptop GPU; TensorRT export well-trodden | **Yes** (baseline until spike-00 GPU probe; YOLO11s is the upgrade target if headroom allows) |
+| **YOLO11s** | COCO-pretrained person/vehicle classes; ~35 FPS at 1080p on the RTX A4500 — same as 11n (decode-bound), with better accuracy (spike-00) | **Yes** — settled by spike-00 (2026-09-16) |
+| YOLO11n | Fallback if a smaller/faster model is ever needed | No (available via config) |
 | YOLO11m + PPE fine-tune | Adds helmet/vest classes (Pictor PPE) | Milestone M5 optional |
 | RT-DETR (quantized) | Transformer accuracy at edges of crowd; slower | Benchmark comparison only |
 | Grounding DINO / OWL-ViT | Zero-shot class discovery for rare machinery | Research spike only; too slow for fast path |
 
 Pipeline: COCO classes {person, forklift*, truck, bus→heavy-vehicle mapping} at M1; fine-tuned PPE
-classes at M5. `forklift` is not a native COCO class — this is decided by **spike-02
-(`docs/spikes/spike-02-forklift-class.md`) early in M1**, which measures three options on the demo
-clip: (a) YOLO-World open-vocab detection, (b) truck/bus proxy mapping, (c) small fine-tune on
-Mendeley machinery + HF warehouse forklift crops. The flagship M2 proximity demo must not ship on
-a proxy that fails on the demo footage.
+classes at M5. `forklift` is not a native COCO class — **spike-02 resolved this (2026-09-16):
+the truck/bus → heavy_vehicle proxy ships for M1–M4** (YOLO-World scored 0% recall; a
+synthetic-only fine-tune failed sim2real on real footage — 0/304 frames). A true `forklift`
+class via real-frame fine-tune lands at M5. Full evidence: `docs/spikes/spike-02-forklift-class.md`.
 
 ### Tracking
 
