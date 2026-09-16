@@ -21,7 +21,9 @@ exists precisely so they don't have to).
   Per-incident estimate: ~15–30 K tokens ⇒ **~$0.001–$0.005 per incident**.
 - Prompt caching: identical harness/system prompts across incidents ⇒ cache-hit pricing on
   recurrent tokens.
-- Heartbeats: watchdog at 60 s with tiny contexts on free tier ⇒ ~$0.
+- Heartbeats: watchdog at 60 s with tiny contexts on free tier ⇒ ~$0. **Deployment-specific
+  assumption:** on paid-only providers this is ~1.4 k calls/day of tiny contexts — flag it in the
+  runbooks and prefer free-tier endpoints for T2.
 - Escalations (tier-3): ≤ 15% of incidents by target, adds ≤ ~$0.02/incident worst case.
 
 **Hard caps:** `--autonomous-max-turns 8`, `--autonomous-max-tokens 50000`,
@@ -52,7 +54,12 @@ Scenario A — Staging/idle (scale-to-zero):
 | Broker | SQS (per-request) | Pub/Sub | Service Bus basic |
 | Storage | EFS + S3 (GBs) | Filestore + GCS | Azure Files + Blob |
 | DB | Aurora Serverless v2 (paused) | Cloud SQL Serverless | PG Flexible (burst) |
-| **Idle/mo** | **~$5–15** (EFS+storage floor) | **~$5–10** | **~$5–15** |
+| **Idle/mo** | **~$5–15** (EFS+storage floor) | **~$5–10** (see Filestore note) | **~$5–15** |
+
+> **GCP Filestore caveat:** Filestore BASIC_HDD has a 1 TiB minimum (~$180/mo) which breaks the
+> scale-to-zero idle claim. The GCP guide documents alternatives (smallest Zonal tier, or
+> harness state on GCS via gcsfuse with cold-start resync). Until chosen, treat GCP idle as
+> ~$185–240/mo if Filestore is used as drawn, ~$5–10 otherwise.
 
 Scenario B — Production-style (10 continuous streams, edge GPU on-prem, cloud slow path):
 
@@ -62,6 +69,7 @@ Scenario B — Production-style (10 continuous streams, edge GPU on-prem, cloud 
 | Broker + DB + storage | ~$40–80 | MSK/PubSub-Pro tier drives the delta |
 | Egress | ~$0 | video stays on edge; telemetry JSON only |
 | LLM (10 sites × 200 incidents/day, tier-1) | **~$20–60** | with caching + escalation caps |
+| **Scenario B total** | **~$70–170** | LLM + infra combined (storage/DB/broker floor included) |
 
 ## 5. Billing Guardrails (for anyone who does provision)
 

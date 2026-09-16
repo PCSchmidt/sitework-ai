@@ -67,7 +67,7 @@ Fallback: 3 self-produced or permissively licensed clips (warehouse, constructio
 | Constraint | Implication |
 | --- | --- |
 | Single developer, ~10–15 h/week | Milestones must each be shippable; ruthless scope control |
-| Local GPU only (assumed ≥ 8 GB VRAM workstation) | Quantized INT8/FP16 models; no cloud GPUs |
+| Local GPU only (workstation or laptop-class; measured by spike-00 before S2 is committed) | Quantized INT8/FP16 models; no cloud GPUs |
 | LLM budget ≤ $10 total dev, ≤ $2/mo demo | Tiered model routing + trigger-rate gating (see `10-cost-model.md`) |
 | No live cloud infra | Everything cloud is IaC-validated + documented, not provisioned |
 | Privacy (faces, plates, workers) | Portfolio demo uses public research datasets per license; blurring option documented (see `08-security.md`) |

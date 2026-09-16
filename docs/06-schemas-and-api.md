@@ -29,6 +29,11 @@ Schemas are the hard contract at the fast/slow boundary (ADR-001). Single source
 }
 ```
 
+`calibration_quality.valid` is computed at emission time as `rms_px ≤ 2.0` (hard gate, see
+`04-data-and-models.md` §3). Rules requiring metric distance must declare
+`min_calibration_quality` in `config/zones.yaml` and degrade to zone-only semantics when
+`valid == false`.
+
 ## 2. TriggerEvent (fast path → agent queue)
 
 ```json
@@ -54,8 +59,19 @@ Schemas are the hard contract at the fast/slow boundary (ADR-001). Single source
   classification ∈ {normal_ops, near_miss, violation, false_positive}, `recompute_inputs` echo.
 - `IncidentRecord`: event_id, timestamps, verified kinematics, classification, severity ∈ enum,
   narrative_md, rule_citations[], recommended_actions[], evidence refs, agent_run stats.
-  Band-3 gate: recompute metrics from `tracks.jsonl` with the same deterministic functions;
-  mismatch > tolerance (0.1 m / 0.1 s) ⇒ reject.
+
+### Band-3 gate (normative)
+
+Recompute metrics from `tracks.jsonl` with the same deterministic functions the fast path used;
+reject on mismatch. **Tolerances:** |Δdistance| ≤ 0.15 m, |Δvelocity| ≤ 0.2 m/s,
+|Δtime| ≤ 0.2 s — or 5% relative, whichever is larger.
+
+- **Fields cross-checked:** `metrics.min_distance_m`, `metrics.duration_s`,
+  `metrics.closing_speed_mps` from the TriggerEvent vs `verified_min_distance_m`,
+  `closing_velocity_mps`, `ttc_s` claimed in the KinematicsVerdict.
+- **Timestamp alignment:** nearest frame within 50 ms; the stored tracklet window is replayed at
+  identical sample indices — no interpolation, no re-tracking.
+- **Rounding:** comparisons on float64; no early rounding in either implementation.
 
 ## 4. REST API (FastAPI, `/api/v1`)
 

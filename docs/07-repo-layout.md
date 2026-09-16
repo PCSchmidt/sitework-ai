@@ -40,7 +40,7 @@ sitework-ai/
 │   ├── terraform/
 │   │   ├── modules/                  # broker, container-service, storage, db
 │   │   └── environments/{aws,gcp,azure}/   # main.tf, variables.tf, *.tfvars.example
-│   └── helm/                         # optional cloud-agnostic K8s chart (stretch)
+│   └── helm/                         # optional cloud-agnostic K8s chart (stretch; descoped from M6)
 ├── assets/clips/                     # pinned demo clips + licenses
 ├── data/manifests/                   # dataset versions, licenses, SHA256
 ├── tests/                            # unit / integration / contract tests
@@ -54,8 +54,11 @@ sitework-ai/
 - **TypeScript** (React dashboard): `pnpm`, eslint + prettier, vitest.
 - **Schemas:** everything crossing a process boundary is a Pydantic model in `pipelines/schemas`;
   TS types generated from exported JSON Schema. No hand-rolled dicts across the boundary.
-- **Agent invocation:** only `agent/prime_adapter.py` may touch prime-agent. Pinned version in
-  `Dockerfile.agent`. Golden-session contract test guards upgrades.
+- **Agent invocation:** only `agent/prime_adapter.py` may touch prime-agent. Exact pinned version in
+  `Dockerfile.agent`. Golden-session contract test guards upgrades. Local Windows/Git Bash dev runs
+  the agent **only in its Linux container** (prime-agent install.sh targets macOS/Linux).
+- **Base images:** pin patch-level tags (e.g. `python:3.11.11-slim-bookworm`,
+  `node:20.18-bookworm-slim`); upgrades are deliberate PRs, not `latest` drift.
 - **Git:** conventional commits; main protected; PRs require green CI.
 
 ## 3. CI Workflows
@@ -65,7 +68,7 @@ sitework-ai/
 | `ci.yaml` | PR/push | ruff + mypy + pytest (unit); ui lint/vitest; `docker compose config` validity; schema compat check |
 | `iac-check.yaml` | PR touching `deploy/` | `terraform fmt -check` + `terraform validate` across aws/gcp/azure envs (no apply, ever) |
 | `eval.yaml` | manual dispatch | headless benchmark run on self-hosted GPU runner; posts summary; artifact: `docs/benchmarks.md` diff |
-| `contract-agent.yaml` | PR touching `agent/` | golden RPC session replay against pinned prime-agent version (feasibility guard, F1) |
+| `contract-agent.yaml` | PR touching `agent/` | golden RPC session replay against pinned prime-agent version (feasibility guard, F1). Created immediately after the M3.0 spike — the spike's golden session is the fixture |
 
 ## 4. Make targets (developer UX)
 

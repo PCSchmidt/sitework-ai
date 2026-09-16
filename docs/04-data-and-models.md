@@ -25,14 +25,17 @@ radius with workers, (3) PPE violation at dock. These map 1:1 to the compound ru
 
 | Candidate | Why | Default? |
 | --- | --- | --- |
-| **YOLO11n/s** | COCO-pretrained person/vehicle classes; excellent FPS on modest GPU; TensorRT export well-trodden | **Yes** (YOLO11s INT8 default) |
+| **YOLO11n** | COCO-pretrained person/vehicle classes; excellent FPS on modest/laptop GPU; TensorRT export well-trodden | **Yes** (baseline until spike-00 GPU probe; YOLO11s is the upgrade target if headroom allows) |
 | YOLO11m + PPE fine-tune | Adds helmet/vest classes (Pictor PPE) | Milestone M5 optional |
 | RT-DETR (quantized) | Transformer accuracy at edges of crowd; slower | Benchmark comparison only |
 | Grounding DINO / OWL-ViT | Zero-shot class discovery for rare machinery | Research spike only; too slow for fast path |
 
 Pipeline: COCO classes {person, forklift*, truck, bus→heavy-vehicle mapping} at M1; fine-tuned PPE
-classes at M5. `forklift` is not a native COCO class — use truck/bus proxies initially and document
-the mapping; replace with fine-tuned head later.
+classes at M5. `forklift` is not a native COCO class — this is decided by **spike-02
+(`docs/spikes/spike-02-forklift-class.md`) early in M1**, which measures three options on the demo
+clip: (a) YOLO-World open-vocab detection, (b) truck/bus proxy mapping, (c) small fine-tune on
+S2TLD/AI City forklift crops. The flagship M2 proximity demo must not ship on a proxy that fails
+on the demo footage.
 
 ### Tracking
 
@@ -60,6 +63,9 @@ Export path: Ultralytics `model.export(format='engine', half=True|int8=True)` �
   error (RMS px) which becomes the **calibration quality metric** forwarded in telemetry.
 - Ground point for a track: bottom-center of bbox projected through H. Velocity in m/s from Kalman
   state in ground coordinates.
+- **Hard quality gate:** `calibration_quality.valid = (rms_px ≤ 2.0)`. Rules that require metric
+  distance (proximity, speed, wrong_way) declare `min_calibration_quality` and degrade to
+  zone-only semantics when calibration is invalid.
 - Known limits (document in report UI): height above ground misestimates ground point; assume ≤ 0.3 m
   error with good calibration (RMS < 2 px); rules include `min_calibration_quality` gate.
 

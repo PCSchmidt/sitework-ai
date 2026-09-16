@@ -7,7 +7,7 @@
 | R3 | **Prime Agent interface drift** between versions | Medium | Rework in `agent/` | Pin version; single adapter module; golden RPC contract test in CI (feasibility F1) | Contract test failure on bump |
 | R4 | **Agent output unreliability** (hallucinated numbers, parse failures) | Medium | DB integrity, credibility | Band-3 recomputation gate; needs_review state; never auto-apply; eval metrics on 30-seed set | Validation pass rate < 90% |
 | R5 | **Cost runaway** from autonomous loops | Medium | Budget | Hard turn/token/time flags; per-day incident budget; tier routing; escalation caps | tokens/incident trend up |
-| R6 | **Homography accuracy** insufficient on real footage | Medium | Metric rules unreliable | Manual calib tool + RMS quality gate; document error bounds; rules degrade to zone-only | RMS > 2 px on test feeds |
+| R6 | **Homography accuracy** insufficient on real footage | Medium | Metric rules unreliable | Manual calib tool + hard RMS gate (`valid = rms_px ≤ 2.0`); document error bounds; metric rules degrade to zone-only when invalid | RMS > 2 px on test feeds |
 | R7 | **GPU constraints locally** (VRAM, TensorRT friction) | Medium | Benchmark targets missed | Start YOLO11n FP16; INT8 later; CPU ONNX smoke path for CI; document hardware limits | < 25 FPS on 1 stream |
 | R8 | **Security misconfig in agent container** | Low | Credibility | Container hardening checklist (docs/08-security.md); no cloud creds; egress allowlist | any egress beyond allowlist |
 | R9 | **Prompt injection via payload strings** | Low | Agent misbehavior | Schema enums; escaping; harness policy (docs/08-security.md §4) | red-team fixture test |

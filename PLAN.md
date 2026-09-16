@@ -51,7 +51,7 @@ GLM-Flash class models via OpenRouter/Z.ai), and the cloud story is delivered as
 | # | Criterion | Measured by |
 | --- | --- | --- |
 | S1 | Full stack runs offline with one command | Fresh-clone `docker compose up --build` smoke test passes |
-| S2 | ≥ 3 concurrent streams at ≥ 25 FPS on local GPU | `evaluation/benchmark_models.py` output, published to `docs/benchmarks.md` (generated deliverable, produced at M5) |
+| S2 | ≥ 3 concurrent streams at ≥ 25 FPS on the target GPU recorded in `docs/spikes/spike-00-gpu-benchmark.md` (fallback: 2 streams if the probe shows laptop-class hardware) | `evaluation/benchmark_models.py` output, published to `docs/benchmarks.md` (generated deliverable, produced at M5) |
 | S3 | LLM invoked < 5 times per 10-min clip | Telemetry counters in event bus audit log |
 | S4 | Every *persisted* agent output validates against schemas | 100% of incident records pass the schema + recomputation gate (failures route to `needs_review`, never the DB); first-try pass rate ≥ 90% is the tracked agent-quality metric (`docs/09-testing-and-evaluation.md`) |
 | S5 | `terraform validate` green on 3 clouds | GitHub Actions workflow `iac-check.yaml` |

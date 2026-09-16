@@ -15,8 +15,10 @@
 - Homography: synthetic ground plane with known 3D points → projected px → reprojected meters
   within tolerance; rotation/translation cases.
 - Rule engine: hand-built track sequences that must/must-not fire each rule family, including
-  dwell timing edges, cooldown dedup, calibration-quality gating.
-- Band-3 gate: mutated agent outputs (distance off by 0.5 m, invalid severity) must be rejected.
+  dwell timing edges, cooldown dedup, calibration-quality gating (RMS just above/below the 2.0 px gate).
+- Band-3 gate: mutated agent outputs must be handled per the tolerances in
+  `06-schemas-and-api.md` §3 — a 0.05 m distance mutation **passes** (inside 0.15 m tolerance),
+  a 0.5 m mutation is **rejected**, invalid severity enum is **rejected**.
 
 ## 3. Agent Evaluation (the probabilistic layer)
 

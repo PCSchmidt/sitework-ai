@@ -11,9 +11,13 @@ embedded*.
 | **Queue dispatcher** (`worker.py`) | every queued TriggerEvent | event JSON | RPC prompt to root session; schema-validated result to DB |
 | **Trajectory & Collision Inspector** (sub-agent) | proximity / TTC-class triggers | tracklet window file + calibration | verified kinematics: min distance, closing velocity, TTC, retreat/advance classification |
 | **Compliance Auditor** (sub-agent) | all confirmed incidents | incident evidence + `config/rules.yaml` + shift state | severity, rule citations, OSHA-style narrative, recommended action |
-| **Stream Watchdog** (sub-agent, heartbeat) | periodic (60 s) | recent `stream.health` + telemetry stats | offline-camera triage, gap notes (no LLM if all healthy) |
-| **Shift Synthesizer** (sub-agent, scheduled) | shift end (cron/heartbeat) | day's incidents + KPI queries via REPL | Markdown/PDF shift audit, KPI table, trend notes |
-| **Parameter Reviewer** (sub-agent, rare) | recurring false-positive patterns | rejected-trigger stats | *proposal-only* threshold adjustments (human-approved) |
+| **Stream Watchdog** (sub-agent, heartbeat) — *optional, M5+* | periodic (60 s) | recent `stream.health` + telemetry stats | offline-camera triage, gap notes (no LLM if all healthy) |
+| **Shift Synthesizer** (sub-agent, scheduled) | shift end (Prime Agent `add_schedule`; shift boundaries from `config/shifts.yaml`) | day's incidents + KPI queries via REPL | Markdown/PDF shift audit, KPI table, trend notes |
+| **Parameter Reviewer** (sub-agent, rare) — *optional, M5+* | recurring false-positive patterns | rejected-trigger stats | *proposal-only* threshold adjustments (human-approved) |
+
+**M3 scope is two sub-agents** (trajectory-inspector, compliance-auditor) plus the dispatcher in
+`worker.py` (not an agent). Watchdog, synthesizer, and parameter-reviewer land at M5/M4 as
+scheduled — keeping M3 aligned with PLAN.md §5.
 
 ## 2. Sub-Agent Specs (persisted in harness)
 
@@ -60,8 +64,11 @@ the same persistent harness state. Guard: heartbeat prompts must be idempotent a
 ## 6. Concurrency & Scaling
 
 - One RPC process per container; one incident in flight per session; queue provides backpressure.
+  Queue depth > 20 pending is the scaling/alarm signal.
 - Scale horizontally by replicas consuming the same queue (visibility timeout 300 s > max triage).
-- Session hygiene: `compact` after every N incidents; `new_session` per shift; auto-compaction on.
+- Session hygiene: `compact` after every 10 incidents (initial value; tune via
+  `get_session_stats` token counts); `new_session` per shift boundary from `config/shifts.yaml`;
+  auto-compaction on.
 
 ## 7. Observability
 
@@ -69,3 +76,12 @@ the same persistent harness state. Guard: heartbeat prompts must be idempotent a
 - Rejection events (schema or cross-check failure) are first-class metrics — the false-positive
   rate of the whole cognitive plane is dashboard-visible.
 - All prompts and outputs stored under `/workspace/incidents/{event_id}/` for replay and eval.
+
+## 8. needs_review Workflow
+
+Incidents failing the Band-3 gate are persisted with `state=needs_review`, the rejection reason,
+and the raw evidence — never silently dropped. The dashboard exposes a review queue (M4). A human
+reviewer either (a) accepts with an override note (row in `reviews`), (b) rejects as false
+positive, or (c) re-queues for agent reprocessing, which consumes a fresh incident budget.
+The needs_review rate is tracked next to validation pass rate; sustained > 10% triggers a
+threshold review (Parameter Reviewer, when enabled).
