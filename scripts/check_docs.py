@@ -43,10 +43,19 @@ def main() -> int:
         any(h[0].name == "06-schemas-and-api.md" for h in grep(r"0\.15 m")),
     )
 
-    # 2. Vision baseline: YOLO11n is baseline; no lingering 'YOLO11s ... default'.
+    # 2. Vision baseline: pre-spike-00 the rule was "11n until probe"; spike-00 resolved
+    # it (11s is free at 1080p). Guard now: the resolution must be recorded, and nothing
+    # may claim 11n is the default anymore.
     check(
-        "no 'YOLO11s ... default' wording remains",
-        not grep(r"YOLO11s.{0,30}default"),
+        "spike-00 resolution recorded (11s default justified by probe)",
+        any(
+            h[0].name == "spike-00-gpu-benchmark.md" and "Default detector is YOLO11s" in h[2]
+            for h in grep(r"Default detector is YOLO11s")
+        ),
+    )
+    check(
+        "no doc still claims YOLO11n as the default",
+        not grep(r"YOLO11n.{0,30}default"),
     )
 
     # 3. Calibration hard gate consistent.
