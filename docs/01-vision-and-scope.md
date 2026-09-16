@@ -2,10 +2,7 @@
 
 ## 1. Problem Statement
 
-Industrial environments — loading docks, warehouses, active construction sites — mix fast heavy
-machinery with vulnerable humans. Safety programs today rely on human spot-checks, static signage,
-and after-the-fact incident review. Continuous, automated, *explainable* safety telemetry is the
-gap SiteWatch AI addresses:
+Industrial environments — loading docks, warehouses, active construction sites — mix fast heavy machinery with vulnerable humans. Safety programs today rely on human spot-checks, static signage, and after-the-fact incident review. Continuous, automated, *explainable* safety telemetry is the gap SiteWatch AI addresses:
 
 1. **Detect** people, forklifts, excavators, and PPE state in real time from standard CCTV/RTSP feeds.
 2. **Quantify** risk in physical units — metric distances, velocities, time-in-zone — not just pixels.
@@ -32,11 +29,7 @@ The concept emerged from a Gemini conversation (archived verbatim in
 
 ## 3. Product Vision
 
-> A hiring manager clones the repo, runs one command, and watches a simulated construction site
-> where a tracked excavator and an unhelmeted worker converge; the deterministic layer computes
-> the closing distance in meters and fires a trigger; the agent layer verifies the trajectory,
-> writes a compliance-grade incident record; the dashboard shows it all live and exports the
-> end-of-shift audit — at zero marginal cost.
+> A hiring manager clones the repo, runs one command, and watches a simulated construction site where a tracked excavator and an unhelmeted worker converge; the deterministic layer computes the closing distance in meters and fires a trigger; the agent layer verifies the trajectory, writes a compliance-grade incident record; the dashboard shows it all live and exports the end-of-shift audit — at zero marginal cost.
 
 ## 4. Personas
 
@@ -60,16 +53,14 @@ The concept emerged from a Gemini conversation (archived verbatim in
 - Public benchmark harness with published metrics.
 
 ### Out of scope
-- Live production deployment, customer integration, real interlock hardware (E-stop actuation is
-  documented as a deterministic hook, never implemented against real equipment).
+- Live production deployment, customer integration, real interlock hardware (E-stop actuation is documented as a deterministic hook, never implemented against real equipment).
 - Model training from scratch; multi-tenancy; mobile apps; audio analytics; drone imagery.
 - 24/7 cloud GPU operation; cloud video egress at scale.
 
 ## 6. Demo Data Strategy
 
 Primary: public industrial datasets (see `04-data-and-models.md`).
-Fallback: 3 self-produced or permissively licensed clips (warehouse, construction, dock) pinned in
-`assets/clips/` so the demo never breaks when upstream datasets change or vanish.
+Fallback: 3 self-produced or permissively licensed clips (warehouse, construction, dock) pinned in `assets/clips/` so the demo never breaks when upstream datasets change or vanish.
 
 ## 7. Constraints
 

@@ -15,44 +15,30 @@ A hybrid deterministic/probabilistic computer vision system for warehouses and c
 
 ## 1. Executive Summary
 
-SiteWatch AI is a full-stack, AI-enabled computer vision application that ingests streaming video
-from warehouse and construction site cameras, detects and tracks people and heavy machinery in
-real time, projects detections onto a metric ground plane, evaluates deterministic spatial safety
-rules (geofences, proximity envelopes, time-in-zone), and escalates only ambiguous or compound
-anomalies to a multi-agent LLM reasoning layer that performs kinematic verification, regulatory
-compliance correlation, and end-of-shift audit synthesis.
+SiteWatch AI is a full-stack, AI-enabled computer vision application that ingests streaming video from warehouse and construction site cameras, detects and tracks people and heavy machinery in real time, projects detections onto a metric ground plane, evaluates deterministic spatial safety rules (geofences, proximity envelopes, time-in-zone), and escalates only ambiguous or compound anomalies to a multi-agent LLM reasoning layer that performs kinematic verification, regulatory compliance correlation, and end-of-shift audit synthesis.
 
 The defining architectural idea — and the portfolio centerpiece — is the **dual-plane split**:
 
-- **Fast path (deterministic, 30–60 FPS):** quantized detectors (YOLO11 / RT-DETR on TensorRT),
-  multi-object tracking (ByteTrack / BoT-SORT), Kalman state estimation, planar homography, and
-  geometric geofencing (Shapely). Pure math. Zero LLM cost. Hard safety interlocks trip here.
+- **Fast path (deterministic, 30–60 FPS):** quantized detectors (YOLO11 / RT-DETR on TensorRT), multi-object tracking (ByteTrack / BoT-SORT), Kalman state estimation, planar homography, and geometric geofencing (Shapely). Pure math. Zero LLM cost. Hard safety interlocks trip here.
 - **Slow path (probabilistic, event-driven):** a containerized Prime Agent reasoning worker with
-  sub-agent specialists (trajectory/collision inspector, compliance auditor, shift synthesizer)
-  that consumes structured anomaly events — not raw frames — and produces explainable,
-  auditable incident reports.
+  sub-agent specialists (trajectory/collision inspector, compliance auditor, shift synthesizer) that consumes structured anomaly events — not raw frames — and produces explainable, auditable incident reports.
 
-Cost discipline is a first-class requirement: the entire system develops and demos **locally at
+Cost discipline is a first-class requirement: the entire system develops and demos **locally at 
 ~$0** (MediaMTX-simulated RTSP feeds, Docker Compose, free/cheap open-weight LLMs such as
-GLM-Flash class models via OpenRouter/Z.ai), and the cloud story is delivered as a **deployable
-reference architecture** — syntactically validated Terraform for AWS, GCP, and Azure plus
-enterprise-grade runbooks — without ever paying for always-on cloud GPU infrastructure.
+GLM-Flash class models via OpenRouter/Z.ai), and the cloud story is delivered as a **deployable reference architecture** — syntactically validated Terraform for AWS, GCP, and Azure plus enterprise-grade runbooks — without ever paying for always-on cloud GPU infrastructure.
 
 ## 2. Goals & Non-Goals
 
 ### Goals
 1. **G1 — Working end-to-end local demo.** `docker compose up --build` runs simulated RTSP feeds
    through detection → tracking → geofencing → agent triage → dashboard in one command, fully offline.
-2. **G2 — Hybrid architecture with hard contracts.** Deterministic perception/reasoning boundary
-   enforced by versioned Pydantic schemas; LLM never in the life-safety critical path.
-3. **G3 — Explainable safety intelligence.** Every incident carries machine-computed telemetry
-   (metric distances, velocities, timelines) annotated with contextual narrative and severity.
+2. **G2 — Hybrid architecture with hard contracts.** Deterministic perception/reasoning boundary enforced by versioned Pydantic schemas; LLM never in the life-safety critical path.
+3. **G3 — Explainable safety intelligence.** Every incident carries machine-computed telemetry (metric distances, velocities, timelines) annotated with contextual narrative and severity.
 4. **G4 — Near-zero cost operation.** Development and portfolio demo cost <$10 total (LLM spend);
    cloud demo uses the "simulated live" replay pattern (pre-computed telemetry replayed over WebSockets).
 5. **G5 — Deployable reference architecture.** Valid Terraform for AWS/GCP/Azure, CI-validated with
    `terraform fmt -check` + `terraform validate`, plus three cloud runbooks and cost model.
-6. **G6 — Honest, reproducible evaluation.** Published benchmark matrix (mAP, MOTA/IDF1, FPS,
-   latency, VRAM) on public industrial datasets with a reproducible eval harness.
+6. **G6 — Honest, reproducible evaluation.** Published benchmark matrix (mAP, MOTA/IDF1, FPS, latency, VRAM) on public industrial datasets with a reproducible eval harness.
 
 ### Non-Goals
 - No live production deployment, no real customer site integration, no actual E-stop hardware control.
@@ -155,18 +141,13 @@ Full milestone detail with task breakdowns: [docs/12-roadmap.md](docs/12-roadmap
 
 ## 7. Top Risks (summary)
 
-1. **Scope explosion** — the full stack is large. Mitigation: milestone gating; M1–M3 are the
-   minimum viable portfolio story; each milestone stands alone.
-2. **Dataset licensing/availability drift** — public industrial datasets move or restrict access.
-   Mitigation: pin dataset versions, keep a small self-recorded/synthetic fallback clip set.
+1. **Scope explosion** — the full stack is large. Mitigation: milestone gating; M1–M3 are the minimum viable portfolio story; each milestone stands alone.
+2. **Dataset licensing/availability drift** — public industrial datasets move or restrict access. Mitigation: pin dataset versions, keep a small self-recorded/synthetic fallback clip set.
 3. **LLM nondeterminism corrupting operational data** — mitigation: schema-verified outputs,
    retry/escalation policy, agent outputs never auto-execute safety actions.
-4. **Cost leak from autonomous agents** — mitigation: hard turn/token/time caps, trigger-rate
-   budget alarms, tiered model routing.
-5. **Homography accuracy on real footage** — mitigation: manual calibration tooling + documented
-   error bounds; treat metric distances as estimates with confidence intervals.
-6. **Prime Agent interface drift** — mitigation: pinned version, single adapter module, golden
-   RPC contract test in CI; LiteLLM fallback worker behind identical contracts (ADR-005).
+4. **Cost leak from autonomous agents** — mitigation: hard turn/token/time caps, trigger-rate budget alarms, tiered model routing.
+5. **Homography accuracy on real footage** — mitigation: manual calibration tooling + documented error bounds; treat metric distances as estimates with confidence intervals.
+6. **Prime Agent interface drift** — mitigation: pinned version, single adapter module, golden RPC contract test in CI; LiteLLM fallback worker behind identical contracts (ADR-005).
 
 Full register: [docs/11-risks.md](docs/11-risks.md). Prime Agent embedding feasibility:
 [docs/prime-agent-feasibility.md](docs/prime-agent-feasibility.md).

@@ -2,8 +2,7 @@
 
 ## 1. Overview
 
-SiteWatch AI is a set of cooperating containers organized in four planes. Video never crosses the
-fast/slow boundary; only structured telemetry does.
+SiteWatch AI is a set of cooperating containers organized in four planes. Video never crosses the fast/slow boundary; only structured telemetry does.
 
 ```
                        +--------------------------------+
