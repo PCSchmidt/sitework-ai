@@ -29,3 +29,8 @@ Thumbs.db
 
 # Preview frames / thumbnails
 assets/clips/_preview/
+
+# Model weights (auto-downloaded)
+*.pt
+*.onnx
+*.engine
