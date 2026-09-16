@@ -1,0 +1,18 @@
+name: YOLO11n COCO-pretrained (Ultralytics)
+version: "ultralytics yolo11n.pt (auto-downloaded at first run)"
+url: https://github.com/ultralytics/ultralytics
+license: AGPL-3.0-or-later   # Ultralytics weights; see note below
+redistribution: research-only   # weights cached locally in data/models (git-ignored), never committed
+gated: false
+downloaded: pending-first-run
+local_path: data/models
+use_in_project:
+  - M1 detector baseline (spike-00 GPU probe, pipeline dev)
+notes: >
+  Ultralytics ships under AGPL-3.0; for this portfolio (source-available,
+  non-commercial, no SaaS) that is acceptable, and the license obligations
+  are noted in the README. An Enterprise license or an Apache/MIT detector
+  (e.g., RT-DETR derivatives) would be required for any commercial use.
+  Weights download to data/models/ on first run; hashes are recorded here
+  after the first verified run.
+files: []

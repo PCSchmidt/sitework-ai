@@ -1,0 +1,1 @@
+{"clip": "assets\\clips\\worker_walking_aisle_1080p.mp4", "model": "yolo11s.pt", "device": "cuda:0", "imgsz": 640, "frames": 300, "wall_s": 11.13, "fps": 27.0, "latency_ms_p50": 17.6, "latency_ms_p95": 24.4, "vram_peak_mb": 94, "gpu": "NVIDIA RTX A4500 Laptop GPU"}

@@ -18,6 +18,7 @@ ui/dist/
 # Data artifacts (large; tracked via manifests instead)
 assets/clips/*.mp4
 data/raw/
+data/models/
 /workspace/incidents/
 
 # OS / editor

@@ -12,6 +12,11 @@ dependencies = [
     "uvicorn>=0.29",
     "redis>=5.0",
     "asyncpg>=0.29",
+    "av>=13.0",
+    "numpy>=1.26",
+    "ultralytics>=8.3",
+    "torch==2.11.0+cu128",
+    "torchvision==0.26.0+cu128",
 ]
 
 [dependency-groups]
@@ -27,6 +32,17 @@ dev = [
 [tool.uv]
 package = false
 
+# CUDA-enabled torch/torchvision for the local GPU (RTX A4500, Ampere).
+# CI uses CPU-only fixtures and does not install this environment's torch.
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -40,6 +56,18 @@ python_version = "3.11"
 strict = true
 mypy_path = ["."]
 files = ["pipelines", "agent"]
+
+# Third-party libs without stubs (mypy follows but doesn't type-fail them)
+[[tool.mypy.overrides]]
+module = ["ultralytics", "av", "torch"]
+ignore_missing_imports = true
+
+# Ultralytics' track()/predict() return Tensor|ndarray unions that strict mode
+# can't narrow; vision modules sit behind schema-typed boundaries (TrackletFrame),
+# so loosen checks there rather than peppering casts.
+[[tool.mypy.overrides]]
+module = ["pipelines.vision.*", "pipelines.ingestion.*"]
+disable_error_code = ["union-attr", "no-any-return", "no-untyped-call", "index", "assignment", "attr-defined"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

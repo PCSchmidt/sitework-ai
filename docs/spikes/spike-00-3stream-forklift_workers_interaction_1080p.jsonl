@@ -1,0 +1,1 @@
+{"clip": "assets\\clips\\forklift_workers_interaction_1080p.mp4", "model": "yolo11s.pt", "device": "cuda:0", "imgsz": 640, "frames": 300, "wall_s": 12.55, "fps": 23.9, "latency_ms_p50": 17.7, "latency_ms_p95": 22.7, "vram_peak_mb": 94, "gpu": "NVIDIA RTX A4500 Laptop GPU"}

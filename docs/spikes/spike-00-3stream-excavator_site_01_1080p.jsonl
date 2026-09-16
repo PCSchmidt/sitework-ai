@@ -1,0 +1,2 @@
+{"clip": "assets\\clips\\excavator_site_01_1080p.mp4", "model": "yolo11s.pt", "device": "cuda:0", "imgsz": 640, "frames": 300, "wall_s": 12.86, "fps": 23.3, "latency_ms_p50": 17.9, "latency_ms_p95": 24.2, "vram_peak_mb": 94, "gpu": "NVIDIA RTX A4500 Laptop GPU"}
+{"clip": "assets\\clips\\excavator_site_01_1080p.mp4", "model": "yolo11s.pt", "device": "cuda:0", "imgsz": 640, "frames": 300, "wall_s": 9.45, "fps": 31.8, "latency_ms_p50": 13.2, "latency_ms_p95": 15.9, "vram_peak_mb": 94, "gpu": "NVIDIA RTX A4500 Laptop GPU"}
