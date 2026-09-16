@@ -1,0 +1,28 @@
+name: nvidia/PhysicalAI-Spatial-Intelligence-Warehouse
+version: "2025-05-24 initial data drop"
+url: https://huggingface.co/datasets/nvidia/PhysicalAI-Spatial-Intelligence-Warehouse
+license: CC-BY-4.0
+redistribution: allowed   # with attribution; one of the few permissive entries
+gated: true               # requires free HF account + click-through contact sharing
+downloaded: 2026-09-16
+local_path: data/raw/hf-warehouse
+content:
+  type: synthetic RGB-D still images (NVIDIA Omniverse), NOT video
+  val_images: 1835        # val/images/*.png (RGB); val/depths/ has matching depth maps
+  qa_annotations: val.json (LLaVA-format spatial QA; distance answers in meters)
+use_in_project:
+  - spike-02 forklift-class detection test set (frames extracted from val/images)
+  - possible fine-tune crops for forklift class
+explicitly_not:
+  - flagship demo video source (no sequences, no tracklets)
+  - MOTA/IDF1 tracking eval ground truth
+notes: >
+  QA text annotations were partially refined by Llama-3.1-70B-Instruct; the
+  Llama 3.1 Community License applies to those fields. We use only images +
+  normalized distance answers, which are covered by the dataset's CC-BY-4.0.
+files:
+  - path: data/raw/hf-warehouse/README.md
+    sha256: 9badce41532b8c96c8585993cc62a1112fc6432fb80acd13d11492a1e1e36d9f
+  - path: data/raw/hf-warehouse/val.json
+    sha256: 371767fee14d0edd7d1a2f2c4afb76dfccaddf9fa213b8695368299beac37ba7
+  # Per-image hashes for the spike-02 test subset are added when that set is frozen.

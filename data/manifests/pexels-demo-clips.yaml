@@ -1,0 +1,38 @@
+name: pexels-demo-clips
+version: "2026-09-16 selection"
+url: https://www.pexels.com/license/   # Pexels license: free to use, no attribution required
+license: Pexels License
+redistribution: allowed   # Pexels license permits use/modification; do not sell unaltered copies
+gated: false
+downloaded: 2026-09-16
+local_path: assets/clips
+content:
+  type: stock video clips (mp4, h264)
+use_in_project:
+  - one-command demo feeds via MediaMTX loop (docker-compose)
+  - multi-stream benchmark inputs (S2)
+clips:
+  - file: forklift_workers_interaction.mp4
+    source: https://www.pexels.com/video/warehouse-operations-with-forklift-and-workers-32243654/
+    role: camera dock_north_01 — flagship forklift/pedestrian proximity demo
+    tech: 3840x2160 @ 25 fps, 12.2 s
+    notes: person + forklift share frame at close range; wide shot, calibratable
+  - file: worker_walking_aisle.mp4
+    source: https://www.pexels.com/video/warehouse-storage-with-worker-walking-38707991/
+    role: camera warehouse_aisle_01 — walkway intrusion / wrong-way / dwell rules
+  - file: excavator_site_01.mp4
+    source: https://www.pexels.com/video/excavator-working-at-construction-12007917/
+    role: camera yard_excavator_01 — swing-radius zone; second S2 benchmark stream
+    tech: 1920x1080 @ 25 fps
+  - file: forklift_worker_02.mp4
+    source: https://www.pexels.com/video/man-with-orange-helmet-getting-into-forklift-5100048/
+    role: spare / PPE demo once M5 lands; 4th stream for scaling tests
+    tech: 3840x2160 @ 30 fps, 26.0 s — hard hat + hi-vis vest clearly visible
+not_selected:
+  - forklift_warehouse_01.mp4   # machinery-only, no pedestrians
+  - forklift_construction_workers.mp4   # crop too tight, no ground plane
+  - excavator_site_02.mp4   # kept on disk as extra benchmark stream only
+notes: >
+  Clips are git-ignored (*.mp4). Preview frames live in assets/clips/_preview/
+  (also git-ignored). If the repo goes public with demo video, prefer committing
+  short transcoded excerpts with this manifest's source links for attribution.

@@ -1,0 +1,30 @@
+name: mendeley-rz8723t6d7 (Development of an AI Dataset for Object Detection at Construction Sites)
+version: "2 (published 2025-04-04)"
+url: https://data.mendeley.com/datasets/rz8723t6d7/2
+doi: 10.17632/rz8723t6d7.2
+authors: [jongho na, HyuSoung Shin, IlDong Yun, JaeKang Lee]
+institutions: [Hankuk University of Foreign Studies, Korea Institute of Civil Engineering and Building Technology]
+license: CC BY 4.0
+redistribution: allowed   # with attribution (cite DOI)
+gated: false              # direct public API download, no account
+downloaded: 2026-09-16
+local_path: data/raw/mendeley-construction
+content:
+  type: extracted 1080p frames with COCO bounding-box annotations (NOT video files)
+  scale: 87,766 images / 856,485 annotated objects
+  classes: 12 construction machinery types (excavators, bulldozers, cranes, etc.)
+  source: 6 months continuous footage, real housing-development site (South Korea)
+use_in_project:
+  - machinery-class ground truth (spike-02-style detection evals, excavator class)
+  - fine-tune source for machinery classes at M5
+explicitly_not:
+  - demo video source (frames only, no temporal sequences per frame set)
+files:
+  - path: data/raw/mendeley-construction/Bbox_dataset_classified.zip
+    sha256: db480d9218bfbae80322f24d4cdffa39dd470f2c35fa302ae6d55b08f4604b1c
+    size_bytes: 9300000000   # ~8.67 GB
+notes: >
+  Frames were sampled at regular intervals from video; ordering/timestamps are not
+  preserved, so this cannot drive tracking (MOTA/IDF1) evaluation. Attribution line
+  for the README/docs: na, jongho; Shin, HyuSoung; Yun, IlDong; Lee, JaeKang (2025),
+  Mendeley Data, V2, doi:10.17632/rz8723t6d7.2

@@ -1,0 +1,23 @@
+name: MOT17 (via Lekim89/MOT17 Hugging Face mirror)
+version: "MOTChallenge MOT17 (Dendorfer et al. 2020), mirror commit f939084"
+url: https://huggingface.co/datasets/Lekim89/MOT17
+upstream_url: https://motchallenge.net/data/MOT17/
+license: other   # mirror card says "other"; original MOTChallenge terms apply
+redistribution: research-only   # do NOT commit frames/annotations to this repo
+gated: false
+downloaded: 2026-09-16
+local_path: data/raw/mot17
+content:
+  type: pedestrian tracking benchmark (image sequences + MOTChallenge-format annotations)
+  train_sequences: 21   # 7 base scenes x 3 detector variants (DPM/FRCNN/SDP)
+  test_sequences: 21    # no public test ground truth
+  frames_checked: "MOT17-02-FRCNN img1 = 600 frames, gt.txt valid MOTChallenge format"
+use_in_project:
+  - ByteTrack baseline regression (MOTA/IDF1) in evaluation/eval_tracking.py (M5)
+notes: >
+  Mirror deviation: ground truth ships one gt/gt.txt per base train sequence
+  (7 files), not per detector-variant folder as in the official bundle.
+  eval_tracking.py must resolve gt per base sequence. motchallenge.net is
+  archived/EOL as of 2026 (submission closed); this HF mirror is the practical
+  source. Cite Dendorfer et al., IJCV 2020, doi:10.1007/s11263-020-01393-0.
+files: []   # multi-file dataset; integrity spot-checked post-download (see notes)

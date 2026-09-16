@@ -25,3 +25,6 @@ data/raw/
 Thumbs.db
 .vscode/
 !.vscode/extensions.json
+
+# Preview frames / thumbnails
+assets/clips/_preview/
