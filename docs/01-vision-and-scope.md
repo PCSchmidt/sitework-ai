@@ -22,7 +22,7 @@ The concept emerged from a Gemini conversation (archived verbatim in
 | LLM placement | Downstream of vision: structured telemetry in, never raw frames; slow path only |
 | Cloud hosting of the agent | Containerized Prime Agent as an event-driven microservice (ECS Fargate / Cloud Run / Container Apps) with persistent harness state on shared NFS-class storage |
 | Relationship to JHU course repo | Separate standalone app; course repo stays deterministic, portfolio app is the hybrid probabilistic+deterministic system |
-| Data sources | Real industrial datasets (S2TLD/MOCS, Pictor PPE/CHV, AI City Challenge) instead of MOT-only synthetic clips |
+| Data sources | Verified public sources: Mendeley construction-machinery frames (CC BY 4.0), NVIDIA PhysicalAI Warehouse stills (CC-BY-4.0), Pexels demo clips, MOT17 tracking baseline, Pictor-v3 PPE |
 | Cost posture | Local-first $0 development; serverless/free-tier demo hosting; "simulated live" telemetry replay instead of cloud video streaming |
 | Model economics | Ultra-cheap/free open-weight LLMs (GLM-Flash class) for high-volume agent work; frontier models reserved for final synthesis |
 | Cloud deployment | Documentation and validated IaC only — no live cloud spend |
@@ -59,8 +59,10 @@ The concept emerged from a Gemini conversation (archived verbatim in
 
 ## 6. Demo Data Strategy
 
-Primary: public industrial datasets (see `04-data-and-models.md`).
-Fallback: 3 self-produced or permissively licensed clips (warehouse, construction, dock) pinned in `assets/clips/` so the demo never breaks when upstream datasets change or vanish.
+Primary: verified public datasets (see `04-data-and-models.md` §1 — validated hands-on during
+M1-prep).
+Demo clips: 3 Pexels clips mapped 1:1 to the demo cameras (`data/manifests/pexels-demo-clips.yaml`),
+pinned in `assets/clips/` (git-ignored) so the demo never breaks when upstream sources change.
 
 ## 7. Constraints
 

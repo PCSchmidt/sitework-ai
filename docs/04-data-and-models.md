@@ -2,21 +2,27 @@
 
 ## 1. Datasets
 
-All primary datasets are research/permissive datasets. **Pin exact versions at download time and
-record license + URL + SHA256 in `data/manifests/`.** Keep a 3-clip fallback set in `assets/clips/`
-so the demo never breaks if an upstream dataset disappears.
+Dataset selection was validated hands-on in M1-prep (2026-09-16). The original candidate list
+(S2TLD, MOCS, AI City tracklets) did not survive verification — recorded in `docs/11-risks.md`
+R2 history. **Actual sources, downloaded and manifested in `data/manifests/`:**
 
-| Dataset | Content | Use in project | License note |
+| Dataset | Content | Use in project | License |
 | --- | --- | --- | --- |
-| **S2TLD / S2TLD-Construction** | ~100 h multi-camera CCTV, heavy machinery + ground workers | Demo clips, detection fine-tune classes (excavator, loader, truck, person) | Verify before redistribution; typically research-only |
-| **MOCS (Moving Objects in Construction Sites)** | Heavy machinery under occlusion, lighting change | Tracker stress test, occlusion evaluation | Research |
-| **Pictor PPE / CHV (Construction Hazard Video)** | PPE compliance, near-misses, swing-radius incidents | PPE classifier head; compound-rule demo scenarios | Research (Pictor-v3) |
-| **AI City Challenge (warehouse/logistics tracks)** | Forklift telemetry, dock monitoring, ground-truth tracklets | MOTA/IDF1 quantitative tracking eval | Competition license; request access early |
-| **MOT17/MOT20** | Pedestrian tracking ground truth | Baseline tracker regression tests | CC BY-NC-SA (evaluation only) |
-| **Fallback set (3 clips)** | Warehouse / construction / dock, 2–4 min each | One-command demo determinism | Self-produced or clearly licensed |
+| **Mendeley rz8723t6d7 v2** ("AI Dataset for Object Detection at Construction Sites") | 87,766 annotated 1080p frames, 856k objects, 12 machinery classes (excavator, bulldozer, crane…), 6 months real site footage | Machinery ground truth (detection evals); M5 fine-tune source | **CC BY 4.0** — redistributable with attribution |
+| **NVIDIA PhysicalAI Spatial Intelligence Warehouse** (HF) | Synthetic Omniverse RGB-D stills, warehouse scenes w/ forklifts + spatial QA | spike-02 forklift-class test set (stills) | **CC-BY-4.0** (gated: free HF account) |
+| **Pexels demo clips** (7 selected) | Stock video: forklift/worker interaction, walkway, excavator site, PPE | Demo feeds (MediaMTX loop) + S2 multi-stream benchmarks | **Pexels License** — free use, redistributable |
+| **MOT17** (via `Lekim89/MOT17` HF mirror) | Pedestrian tracking ground truth | MOTA/IDF1 baseline regression (M5) | research-only (eval only); motchallenge.net is EOL, mirror is the practical source |
+| **Pictor-v3 (Pictor PPE)** | 1,472 images, worker/hat/vest annotations | M5 PPE fine-tune | research, citation required; GDrive download |
+| **Ehsaanali construction-activity repo** | 15 real excavation clips | local-only supplement if Pexels excavator clips prove too short | ⚠️ no LICENSE — local use only, never committed |
 
-**Selection for demo:** 3 clips minimum — (1) forklift near pedestrian walkway, (2) excavator swing
-radius with workers, (3) PPE violation at dock. These map 1:1 to the compound rules in
+**Dropped after verification:** S2TLD-Construction (unverifiable provenance; name collides with
+an unrelated traffic-light dataset), MOCS (source link dead), AI City Challenge (2025 Track 3 is
+synthetic VLM stills, not tracklets; no forklift telemetry video — not what the original plan
+assumed), Macgence Kaggle listing (marketing page, no actual data).
+
+**Demo clip set (selected, see `data/manifests/pexels-demo-clips.yaml`):** 3 clips map 1:1 to the
+cameras in `config/cameras.yaml` — forklift/pedestrian interaction (dock), worker walking aisle
+(warehouse), excavator site (yard) — plus one PPE spare. These map to the compound rules in
 `config/zones.yaml`.
 
 ## 2. Vision Model Strategy
@@ -34,8 +40,8 @@ Pipeline: COCO classes {person, forklift*, truck, bus→heavy-vehicle mapping} a
 classes at M5. `forklift` is not a native COCO class — this is decided by **spike-02
 (`docs/spikes/spike-02-forklift-class.md`) early in M1**, which measures three options on the demo
 clip: (a) YOLO-World open-vocab detection, (b) truck/bus proxy mapping, (c) small fine-tune on
-S2TLD/AI City forklift crops. The flagship M2 proximity demo must not ship on a proxy that fails
-on the demo footage.
+Mendeley machinery + HF warehouse forklift crops. The flagship M2 proximity demo must not ship on
+a proxy that fails on the demo footage.
 
 ### Tracking
 
@@ -94,7 +100,7 @@ not re-fired within `cooldown_s` (default 120 s).
 | Models | YOLO11n, YOLO11s, YOLO11m, RT-DETR (if feasible) |
 | Precision | FP32, FP16, INT8 |
 | Streams | 1, 2, 3, 4 concurrent |
-| Metrics | FPS/stream, end-to-end latency p50/p95, VRAM, mAP@50 (PPE classes where labeled), MOTA/IDF1 (AI City / MOT clips) |
+| Metrics | FPS/stream, end-to-end latency p50/p95, VRAM, mAP@50 (machinery classes on Mendeley, PPE classes where labeled), MOTA/IDF1 (MOT17) |
 | Hardware | record GPU model, driver, TensorRT version, batch size |
 
 Publication standard: every number reproducible via `make eval` with fixed seeds and pinned weights.

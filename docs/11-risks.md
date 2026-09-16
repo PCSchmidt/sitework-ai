@@ -3,7 +3,7 @@
 | # | Risk | P | Impact | Mitigation | Early warning |
 | --- | --- | --- | --- | --- | --- |
 | R1 | **Scope explosion** — 4 planes is a lot for one dev | High | Schedule slip | Milestone gating; M1–M3 = minimum viable story; each milestone demoable alone | Milestone > 1.5× estimate |
-| R2 | **Dataset access/license drift** (AI City restricted, S2TLD moved) | Medium | Demo/eval gaps | Pin versions + manifests; 3-clip self-produced fallback; eval on MOT-derived clips | Download failure / license ambiguity |
+| R2 | **Dataset access/license drift** | Medium | Demo/eval gaps | **Occurred and resolved 2026-09-16:** S2TLD-Construction unverifiable, MOCS link dead, AI City 2025 T3 is VLM stills not tracklets, Macgence Kaggle is a marketing page. Actual pinned set: Mendeley rz8723t6d7 (CC BY 4.0), HF PhysicalAI Warehouse (CC-BY-4.0), MOT17 HF mirror, Pexels demo clips, Pictor-v3 — all under `data/manifests/` with hashes | Download failure / license ambiguity |
 | R3 | **Prime Agent interface drift** between versions | Medium | Rework in `agent/` | Pin version; single adapter module; golden RPC contract test in CI (feasibility F1) | Contract test failure on bump |
 | R4 | **Agent output unreliability** (hallucinated numbers, parse failures) | Medium | DB integrity, credibility | Band-3 recomputation gate; needs_review state; never auto-apply; eval metrics on 30-seed set | Validation pass rate < 90% |
 | R5 | **Cost runaway** from autonomous loops | Medium | Budget | Hard turn/token/time flags; per-day incident budget; tier routing; escalation caps | tokens/incident trend up |

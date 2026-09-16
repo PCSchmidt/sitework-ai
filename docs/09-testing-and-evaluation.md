@@ -37,8 +37,10 @@ Eval set: 30 seeded incidents from the demo clips with hand labels (`normal_ops`
 
 ## 4. Tracking Metrics
 
-MOTA/IDF1/IDF1-vs-matches on MOT-derived clips and AI City track clips (where licenses allow) via
-`evaluation/eval_tracking.py` using motmetrics; results land in `docs/benchmarks.md`.
+MOTA/IDF1/IDF1-vs-matches on MOT17 clips (via the pinned HF mirror) via
+`evaluation/eval_tracking.py` using motmetrics; results land in `docs/benchmarks.md`. Note: the
+mirror ships one `gt.txt` per base train sequence — resolve GT per base scene, not per detector
+folder.
 
 ## 5. Reproducibility Rules
 

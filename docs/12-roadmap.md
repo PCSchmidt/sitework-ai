@@ -26,8 +26,9 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
       gates the S2 commitment and the YOLO11n→11s upgrade decision
 - [ ] **Spike-02 (parallel):** forklift-class options measured on demo clip →
       `docs/spikes/spike-02-forklift-class.md`; decide YOLO-World vs proxy vs mini fine-tune
-- [ ] Dataset selection + `data/manifests/` (versions, licenses, SHA256) for the actual demo clips;
-      request AI City access early (approval latency)
+- [x] Dataset selection + `data/manifests/` (versions, licenses, SHA256) for the actual demo clips —
+      done 2026-09-16: Mendeley machinery, HF warehouse, MOT17 mirror, Pexels demo set
+      (see `docs/04-data-and-models.md` §1 for the verified source table)
 - [ ] Ingestion: MediaMTX MP4 looping; RTSP frame source (PyAV/GStreamer), decode benchmarks
 - [ ] `detector.py`: YOLO11n via Ultralytics → ONNX → TensorRT FP16 wrappers (11s/INT8 after spike-00)
 - [ ] `tracker.py`: ByteTrack + per-track Kalman (position/velocity, covariance)

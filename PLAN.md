@@ -142,7 +142,10 @@ Full milestone detail with task breakdowns: [docs/12-roadmap.md](docs/12-roadmap
 ## 7. Top Risks (summary)
 
 1. **Scope explosion** — the full stack is large. Mitigation: milestone gating; M1–M3 are the minimum viable portfolio story; each milestone stands alone.
-2. **Dataset licensing/availability drift** — public industrial datasets move or restrict access. Mitigation: pin dataset versions, keep a small self-recorded/synthetic fallback clip set.
+2. **Dataset licensing/availability drift** — public datasets move or restrict access. This fired
+   during M1-prep (see [docs/11-risks.md](docs/11-risks.md) R2); resolved by pinning a verified set
+   (Mendeley CC BY 4.0 machinery frames, HF warehouse stills, MOT17 mirror, Pexels demo clips) with
+   manifests + hashes in `data/manifests/`.
 3. **LLM nondeterminism corrupting operational data** — mitigation: schema-verified outputs,
    retry/escalation policy, agent outputs never auto-execute safety actions.
 4. **Cost leak from autonomous agents** — mitigation: hard turn/token/time caps, trigger-rate budget alarms, tiered model routing.
@@ -156,6 +159,7 @@ Full register: [docs/11-risks.md](docs/11-risks.md). Prime Agent embedding feasi
 
 1. Create repo skeleton per [docs/07-repo-layout.md](docs/07-repo-layout.md); initialize `uv`/`ruff`/`pytest` and GitHub Actions.
 2. Land M0: Compose skeleton with MediaMTX + Redis + FastAPI + Vite placeholders.
-3. Download and license-check datasets from [docs/04-data-and-models.md](docs/04-data-and-models.md); pick 3 demo clips.
+3. ~~Download and license-check datasets~~ — **done 2026-09-16**; demo clip set selected
+   (see [docs/04-data-and-models.md](docs/04-data-and-models.md) §1 and `data/manifests/`).
 4. Implement `pipelines/ingestion` MP4 loop → frame publisher; validate 3-stream decode on local hardware.
 5. Wire first detector + tracker; publish first tracklet JSON to Redis; verify with `redis-cli`.
