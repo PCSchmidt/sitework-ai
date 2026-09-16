@@ -1,29 +1,52 @@
-# Spike-02: Forklift-Class Detection Strategy
+# Spike-02: Forklift-Class Detection Strategy — RESULTS
 
-**Status:** planned (parallel with M1) · **Owner:** solo dev · **Timebox:** 2 days
+**Status:** complete (2026-09-16) · **Owner:** solo dev · **Timebox:** 2 days → done in 1 session
 
-## Purpose
+## Question
 
-`forklift` is not a COCO class, but the flagship M2 demo is a forklift–pedestrian proximity event.
-Shipping the demo on the truck/bus proxy without measuring it risks a broken flagship scenario
-(see plan review, "forklift demo paradox"). This spike picks the strategy with data.
+`forklift` is not a COCO class. The flagship M2 demo (forklift–pedestrian proximity) needs a
+forklift detector. Three options were evaluated with real measurements, not assumptions.
 
-## Options
+## Test setup
 
-| Option | Approach | Risk |
-| --- | --- | --- |
-| A | YOLO-World open-vocab detection (`forklift` prompt) | FPS hit on laptop GPU; prompt sensitivity |
-| B | COCO truck/bus proxy with documented mapping | Systematic false negatives on real forklifts |
-| C | Small fine-tune of YOLO11n on Mendeley machinery frames + HF warehouse forklift crops (~500–1k images) | Time cost; labeling effort |
+- **Synthetic eval set:** 40 frames from the HF PhysicalAI Warehouse val split (30
+  forklift-positive by the dataset's "transporter" label, RLE masks → GT boxes, IoU ≥ 0.5).
+  `data/raw/spike02-testset/manifest.json`; harness: `evaluation/spike02_forklift.py`.
+- **Real-footage check:** `assets/clips/forklift_workers_interaction_1080p.mp4` (304 frames,
+  real warehouse forklift + pedestrian).
 
-## Procedure
+## Results
 
-1. Extract 20–30 labeled forklift frames from the chosen demo clip(s) as the test set.
-2. Evaluate each option: recall@0.5 IoU on forklift, FPS impact, false positives on trucks.
-3. Pick the option with recall ≥ 0.8 and acceptable FPS (fits spike-00 budget).
+| Option | Synthetic recall@0.5 | Synthetic precision@0.5 | Real clip | Verdict |
+| --- | --- | --- | --- | --- |
+| **(b) COCO truck/bus proxy** (YOLO11s) | 0.145 | 0.581 | `truck` fires 325× / 304 frames; `person` 662× | ✅ **works on real footage** |
+| (a) YOLO-World "forklift" (yolov8s-worldv2) | **0.000** | — | — | ❌ dead on this distribution |
+| (c) Fine-tune YOLO11s on synthetic HF frames (20 ep) | mAP50 0.247 (weak) | precision 0.222 | **0 / 304 frames** | ❌ fails sim2real |
 
-## Decision (fill in during M1)
+## The counterintuitive finding
 
-- **Chosen option:** _TBD_
-- **Measured recall / FPS:** _TBD_
-- **Rationale:** _TBD_
+The "hacky proxy" the docs warned against is the only option that works **on the demo's actual
+domain** (real footage): a real forklift reads as `truck` to COCO YOLO. The fine-tune failed
+because Omniverse-synthetic forklifts don't look like real ones — a clean sim2real gap, confirmed
+empirically (0/304 frames). The proxy's poor 14.5% recall on *synthetic* frames is the mirror
+image: synthetic AGVs don't look like trucks. Each approach fails in the other's domain; the demo
+runs on real footage, so the proxy wins **for now**.
+
+## Decision
+
+**Ship option (b) for M1–M4**, with guardrails:
+- Class `heavy_vehicle` (truck/bus) is the forklift stand-in; per-camera confidence gates in
+  `config/cameras.yaml` absorb false positives; the zone engine filters off-zone noise
+  (e.g. `traffic light` fired 24× on the clip — irrelevant outside zones).
+- The `forklift` passthrough in `pipelines/vision/detector.py` stays for a future true class.
+
+**Deferred to M5 (real fine-tune, done right):** label *real* frames (our own Pexels clips via
+the calibration tooling + Pictor-v3) rather than synthetic renders. Mendeley machinery set remains
+the excavator-class label source (its download was corrupt on Mendeley's end 2026-09-16; retry at
+M5 — not needed for the M2 demo).
+
+## Recorded risk
+
+Sim2real: any model trained only on synthetic data is presumed non-deployable on real footage
+until validated on a real clip. This spike is the standing evidence; reference it before any
+future synthetic-only training proposal.

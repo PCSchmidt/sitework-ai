@@ -34,3 +34,8 @@ assets/clips/_preview/
 *.pt
 *.onnx
 *.engine
+
+# Spike-02 artifacts (training runs, fine-tune dataset)
+runs/
+data/raw/spike02-testset/
+data/raw/spike02-finetune/

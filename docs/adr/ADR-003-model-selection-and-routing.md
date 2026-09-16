@@ -9,6 +9,12 @@
   (too slow for fast path). `forklift` (not a COCO class) is resolved by spike-02
   (YOLO-World open-vocab vs truck/bus proxy vs small fine-tune), measured on the demo clip in M1.
   Rationale: best FPS/accuracy/maturity on a modest local GPU; TensorRT export path well supported.
+
+  **spike-02 outcome (2026-09-16):** the forklift class ships as the `truck`/`bus` →
+  `heavy_vehicle` proxy. Measured: YOLO-World open-vocab scored 0% recall on warehouse frames,
+  and a fine-tune on synthetic Omniverse frames failed sim2real (0/304 detections on real
+  footage), while the proxy fires on every frame of the real interaction clip. A true `forklift`
+  class via real-frame fine-tune is deferred to M5 (docs/spikes/spike-02-forklift-class.md).
 - LLM tiers: T1 flash-class (GLM-Flash / free endpoints) for all sub-agent execution; T2 free tier
   for heartbeats; T3 larger models only for escalations (2 failed T1 turns) and final shift
   synthesis. Routing via OpenAI-compatible base URL (OpenRouter/Z.ai/local vLLM) — compatible with

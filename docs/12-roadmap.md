@@ -24,8 +24,8 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
 ## M1 — Perception core (2–3 weeks)
 - [ ] **Spike-00 (first 2 days):** GPU benchmark probe → `docs/spikes/spike-00-gpu-benchmark.md`;
       gates the S2 commitment and the YOLO11n→11s upgrade decision
-- [ ] **Spike-02 (parallel):** forklift-class options measured on demo clip →
-      `docs/spikes/spike-02-forklift-class.md`; decide YOLO-World vs proxy vs mini fine-tune
+- [x] **Spike-02 (parallel):** forklift-class options measured → `docs/spikes/spike-02-forklift-class.md`;
+      decided: ship the truck/bus → heavy_vehicle proxy for M1–M4; real-frame fine-tune at M5
 - [x] Dataset selection + `data/manifests/` (versions, licenses, SHA256) for the actual demo clips —
       done 2026-09-16: Mendeley machinery, HF warehouse, MOT17 mirror, Pexels demo set
       (see `docs/04-data-and-models.md` §1 for the verified source table)
