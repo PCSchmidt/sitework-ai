@@ -1,0 +1,4 @@
+rules:
+  - id: bad_proximity
+    kind: proximity
+    description: Missing radius/duration on purpose — must fail validation.

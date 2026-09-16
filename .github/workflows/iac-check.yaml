@@ -1,0 +1,26 @@
+name: iac-check
+
+# Validate-only, forever (ADR-004). terraform apply is never run in automation.
+on:
+  pull_request:
+    paths: ["deploy/**"]
+  push:
+    branches: [main]
+    paths: ["deploy/**"]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [aws, gcp, azure]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: fmt check (${{ matrix.env }})
+        run: terraform -chdir=deploy/terraform/environments/${{ matrix.env }} fmt -check -diff
+      - name: init (${{ matrix.env }})
+        run: terraform -chdir=deploy/terraform/environments/${{ matrix.env }} init -backend=false -input=false
+      - name: validate (${{ matrix.env }})
+        run: terraform -chdir=deploy/terraform/environments/${{ matrix.env }} validate

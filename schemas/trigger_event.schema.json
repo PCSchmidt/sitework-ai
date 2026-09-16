@@ -1,0 +1,158 @@
+{
+  "$defs": {
+    "CalibrationQuality": {
+      "additionalProperties": false,
+      "properties": {
+        "rms_px": {
+          "minimum": 0,
+          "title": "Rms Px",
+          "type": "number"
+        },
+        "valid": {
+          "title": "Valid",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "rms_px",
+        "valid"
+      ],
+      "title": "CalibrationQuality",
+      "type": "object"
+    },
+    "Severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "TriggerMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "min_distance_m": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Distance M"
+        },
+        "duration_s": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration S"
+        },
+        "closing_speed_mps": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closing Speed Mps"
+        }
+      },
+      "title": "TriggerMetrics",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Fast path \u2192 agent queue (docs/06 \u00a72).",
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "trigger_ts": {
+      "title": "Trigger Ts",
+      "type": "number"
+    },
+    "camera_id": {
+      "title": "Camera Id",
+      "type": "string"
+    },
+    "rule_id": {
+      "title": "Rule Id",
+      "type": "string"
+    },
+    "severity_hint": {
+      "$ref": "#/$defs/Severity"
+    },
+    "metrics": {
+      "$ref": "#/$defs/TriggerMetrics",
+      "default": {
+        "min_distance_m": null,
+        "duration_s": null,
+        "closing_speed_mps": null
+      }
+    },
+    "involved_track_ids": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Involved Track Ids",
+      "type": "array"
+    },
+    "track_window_ref": {
+      "title": "Track Window Ref",
+      "type": "string"
+    },
+    "clip_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Clip Ref"
+    },
+    "cooldown_key": {
+      "title": "Cooldown Key",
+      "type": "string"
+    },
+    "calibration_quality": {
+      "$ref": "#/$defs/CalibrationQuality"
+    }
+  },
+  "required": [
+    "event_id",
+    "trigger_ts",
+    "camera_id",
+    "rule_id",
+    "severity_hint",
+    "involved_track_ids",
+    "track_window_ref",
+    "cooldown_key",
+    "calibration_quality"
+  ],
+  "title": "TriggerEvent",
+  "type": "object"
+}

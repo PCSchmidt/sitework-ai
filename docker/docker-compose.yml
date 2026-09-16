@@ -1,0 +1,57 @@
+# One-command local full stack (docs/07 §4: make up). M0: mediamtx + redis + postgres
+# + api (stub) + ui (stub) + vision (stub). Agent service is added at M3.
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:1.9.3
+    ports:
+      - "8554:8554"   # RTSP
+      - "8889:8889"   # WebRTC
+    networks: [internal]
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "no"]
+    networks: [internal]
+
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: sitewatch
+      POSTGRES_PASSWORD: sitewatch
+      POSTGRES_DB: sitewatch
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    ports:
+      - "8000:8000"
+    depends_on: [postgres, redis]
+    networks: [internal]
+
+  vision:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vision
+    depends_on: [redis, mediamtx]
+    networks: [internal]
+
+  ui:
+    image: node:20.18-bookworm-slim
+    working_dir: /app
+    volumes:
+      - ../ui:/app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "5173:5173"
+    depends_on: [api]
+    networks: [internal]
+
+networks:
+  internal:
+
+volumes:
+  pgdata:

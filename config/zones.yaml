@@ -1,0 +1,21 @@
+# Ground-plane zones in meters (docs/06 §7). Polygons are filled by the calibration
+# tool workflow (make calib); values below are plausible placeholders for the demo site plan.
+zones:
+  - id: dock_north
+    camera_id: dock_north_01
+    kind: dock_apron
+    active: true
+    min_calibration_quality: 2.0
+    polygon_m: [[0.0, 0.0], [20.0, 0.0], [20.0, 12.0], [0.0, 12.0]]
+  - id: pedestrian_walkway_north
+    camera_id: dock_north_01
+    kind: pedestrian_walkway
+    active: true
+    min_calibration_quality: 2.0
+    polygon_m: [[0.0, 12.0], [20.0, 12.0], [20.0, 15.0], [0.0, 15.0]]
+  - id: excavator_swing_radius
+    camera_id: yard_excavator_01
+    kind: swing_radius
+    active: true
+    min_calibration_quality: 2.0
+    polygon_m: [[8.0, 8.0], [16.0, 8.0], [16.0, 16.0], [8.0, 16.0]]

@@ -1,0 +1,22 @@
+# Slow-path agent container (M3). Node 20 (prime-agent supervisor) + Python 3.11 (IPython
+# kernel) + uv, non-root, pinned prime-agent version. Defined now so the contract is
+# visible; built and exercised in M3 after the M3.0 spike.
+FROM node:20.18-bookworm-slim
+
+ENV PYTHONUNBUFFERED=1
+ARG PRIME_AGENT_VERSION=0.9.5
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3.11 python3.11-venv curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Pinned prime-agent install (docs/07 §2; upgrade only with a green contract test).
+RUN npm install -g "prime-agent@${PRIME_AGENT_VERSION}"
+
+RUN useradd --uid 1000 --create-home agent
+USER agent
+WORKDIR /workspace
+
+# /root/.prime equivalent (harness state) is mounted at /home/agent/.prime in this image.
+CMD ["prime-agent", "--mode", "rpc"]

@@ -1,0 +1,18 @@
+# Edge vision worker (fast path). M0 stub: plain Python runtime; the CUDA/TensorRT
+# base (nvcr.io/nvidia/tensorrt or nvidia/cuda devel) + GStreamer/OpenCV land in M1
+# after spike-00 records the target GPU.
+FROM python:3.11.11-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+RUN pip install --no-cache-dir uv
+COPY pyproject.toml ./
+RUN uv pip install --system --no-cache pydantic pyyaml redis
+
+COPY pipelines ./pipelines
+COPY config ./config
+
+# M0: idle heartbeat so `make up` boots the full stack. M1 replaces with pipeline.py.
+CMD ["python", "-c", "import time; print('vision stub up (M1 replaces with fast-path pipeline)'); \
+[t.time.sleep(60) for _ in iter(int, 1)]"]

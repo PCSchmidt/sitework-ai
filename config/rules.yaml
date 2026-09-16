@@ -1,0 +1,25 @@
+# Deterministic fast-path rules (docs/04 §4). Citations are site-policy strings;
+# the compliance auditor cites rule ids from this file and never invents regulations.
+rules:
+  - id: proximity_forklift_pedestrian
+    kind: proximity
+    description: Forklift within radius of a pedestrian for longer than the allowed duration.
+    citation: SITE-POLICY-3.1 (powered industrial truck pedestrian separation)
+    zone_ids: [dock_north]
+    radius_m: 3.0
+    duration_s: 2.0
+    cooldown_s: 120
+  - id: intrusion_excavator_swing
+    kind: zone_intrusion
+    description: Person inside the active excavator swing radius beyond the dwell limit.
+    citation: SITE-POLICY-4.2 (swing radius exclusion)
+    zone_ids: [excavator_swing_radius]
+    dwell_s: 3.0
+    cooldown_s: 120
+  - id: speed_limit_dock
+    kind: speed
+    description: Vehicle exceeding dock-area speed limit.
+    citation: SITE-POLICY-3.4 (dock speed limit)
+    zone_ids: [dock_north]
+    limit_mps: 2.2
+    cooldown_s: 60

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / UI
+node_modules/
+ui/dist/
+
+# Env / secrets
+.env
+*.local
+
+# Data artifacts (large; tracked via manifests instead)
+assets/clips/*.mp4
+data/raw/
+/workspace/incidents/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+!.vscode/extensions.json

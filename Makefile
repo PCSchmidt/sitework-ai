@@ -1,0 +1,36 @@
+# Developer UX targets (docs/07 §4). Run from repo root.
+
+COMPOSE := docker compose -f docker/docker-compose.yml
+
+.PHONY: up down eval calib test iac report docs-check schema-export
+
+up:        ## docker compose up --build (full stack, simulated feeds)
+	$(COMPOSE) up --build
+
+down:      ## stop the local stack
+	$(COMPOSE) down
+
+test:      ## unit + integration + contract tests
+	uv run pytest
+
+docs-check: ## M0.5 doc-consistency checks
+	uv run python scripts/check_docs.py
+
+schema-export: ## export Pydantic JSON Schemas to schemas/
+	uv run python -m pipelines.schemas.export
+
+eval:      ## headless benchmark + eval harness (GPU)
+	uv run python evaluation/benchmark_models.py
+
+calib:     ## launch manual homography calibration tool
+	uv run python -m pipelines.geometry.calibrate
+
+iac:       ## terraform fmt -check && validate for all three clouds
+	@for env in aws gcp azure; do \
+		terraform -chdir=deploy/terraform/environments/$$env fmt -check && \
+		terraform -chdir=deploy/terraform/environments/$$env init -backend=false -input=false >/dev/null && \
+		terraform -chdir=deploy/terraform/environments/$$env validate || exit 1; \
+	done
+
+report:    ## regenerate docs/benchmarks.md + shift-report samples
+	uv run python evaluation/generate_report.py

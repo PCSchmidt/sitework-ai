@@ -1,0 +1,72 @@
+{
+  "$defs": {
+    "Classification": {
+      "enum": [
+        "normal_ops",
+        "near_miss",
+        "violation",
+        "false_positive"
+      ],
+      "title": "Classification",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Agent output \u2014 verified kinematics (docs/06 \u00a73).",
+  "properties": {
+    "verified_min_distance_m": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Verified Min Distance M"
+    },
+    "closing_velocity_mps": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Closing Velocity Mps"
+    },
+    "ttc_s": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ttc S"
+    },
+    "classification": {
+      "$ref": "#/$defs/Classification"
+    },
+    "recompute_inputs": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "title": "Recompute Inputs",
+      "type": "object"
+    }
+  },
+  "required": [
+    "classification"
+  ],
+  "title": "KinematicsVerdict",
+  "type": "object"
+}

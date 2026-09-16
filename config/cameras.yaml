@@ -1,0 +1,20 @@
+# Camera inventory (docs/06 §7). RTSP URLs point at MediaMTX-simulated feeds in local dev.
+cameras:
+  - id: dock_north_01
+    name: Dock North 01
+    rtsp_url: rtsp://mediamtx:8554/dock_north_01
+    width: 1280
+    height: 720
+    confidence_gate: 0.4
+  - id: yard_excavator_01
+    name: Yard Excavator 01
+    rtsp_url: rtsp://mediamtx:8554/yard_excavator_01
+    width: 1280
+    height: 720
+    confidence_gate: 0.4
+  - id: warehouse_aisle_01
+    name: Warehouse Aisle 01
+    rtsp_url: rtsp://mediamtx:8554/warehouse_aisle_01
+    width: 1280
+    height: 720
+    confidence_gate: 0.4

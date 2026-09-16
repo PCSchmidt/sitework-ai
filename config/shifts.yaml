@@ -1,0 +1,12 @@
+# Shift boundaries drive the Shift Synthesizer schedule (docs/05 §1, §5).
+timezone: America/New_York
+shifts:
+  - name: day
+    start_local: "06:00"
+    end_local: "14:30"
+  - name: swing
+    start_local: "14:30"
+    end_local: "23:00"
+  - name: night
+    start_local: "23:00"
+    end_local: "06:00"

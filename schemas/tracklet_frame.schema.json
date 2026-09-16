@@ -1,0 +1,246 @@
+{
+  "$defs": {
+    "CalibrationQuality": {
+      "additionalProperties": false,
+      "properties": {
+        "rms_px": {
+          "minimum": 0,
+          "title": "Rms Px",
+          "type": "number"
+        },
+        "valid": {
+          "title": "Valid",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "rms_px",
+        "valid"
+      ],
+      "title": "CalibrationQuality",
+      "type": "object"
+    },
+    "PPEState": {
+      "additionalProperties": false,
+      "properties": {
+        "helmet": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helmet"
+        },
+        "vest": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vest"
+        }
+      },
+      "title": "PPEState",
+      "type": "object"
+    },
+    "Track": {
+      "additionalProperties": false,
+      "properties": {
+        "track_id": {
+          "title": "Track Id",
+          "type": "integer"
+        },
+        "cls": {
+          "title": "Cls",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox_px": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bbox Px",
+          "type": "array"
+        },
+        "ground_point_m": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ground Point M"
+        },
+        "velocity_mps": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Velocity Mps"
+        },
+        "speed_mps": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speed Mps"
+        },
+        "state": {
+          "$ref": "#/$defs/TrackState"
+        },
+        "zone_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Zone Ids",
+          "type": "array"
+        },
+        "ppe": {
+          "$ref": "#/$defs/PPEState",
+          "default": {
+            "helmet": null,
+            "vest": null
+          }
+        }
+      },
+      "required": [
+        "track_id",
+        "cls",
+        "confidence",
+        "bbox_px",
+        "state"
+      ],
+      "title": "Track",
+      "type": "object"
+    },
+    "TrackState": {
+      "additionalProperties": false,
+      "properties": {
+        "cov_trace": {
+          "minimum": 0,
+          "title": "Cov Trace",
+          "type": "number"
+        },
+        "age_frames": {
+          "minimum": 0,
+          "title": "Age Frames",
+          "type": "integer"
+        },
+        "hits": {
+          "minimum": 0,
+          "title": "Hits",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cov_trace",
+        "age_frames",
+        "hits"
+      ],
+      "title": "TrackState",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Fast path \u2192 broker, ~10 Hz/camera (docs/06 \u00a71).",
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "camera_id": {
+      "title": "Camera Id",
+      "type": "string"
+    },
+    "frame_ts": {
+      "title": "Frame Ts",
+      "type": "number"
+    },
+    "seq": {
+      "minimum": 0,
+      "title": "Seq",
+      "type": "integer"
+    },
+    "calibration_quality": {
+      "$ref": "#/$defs/CalibrationQuality"
+    },
+    "tracks": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Track"
+      },
+      "title": "Tracks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "camera_id",
+    "frame_ts",
+    "seq",
+    "calibration_quality"
+  ],
+  "title": "TrackletFrame",
+  "type": "object"
+}
