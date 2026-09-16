@@ -1,8 +1,11 @@
-# One-command local full stack (docs/07 §4: make up). M0: mediamtx + redis + postgres
-# + api (stub) + ui (stub) + vision (stub). Agent service is added at M3.
+# One-command local full stack (docs/07 §4: make up). M1: mediamtx loops the 3 demo
+# clips as RTSP; vision workers run the fast path per camera. Agent service added at M3.
 services:
   mediamtx:
-    image: bluenviron/mediamtx:1.9.3
+    image: bluenviron/mediamtx:1.9.3-ffmpeg   # -ffmpeg variant for runOnDemand looping
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+      - ../assets/clips:/clips:ro
     ports:
       - "8554:8554"   # RTSP
       - "8889:8889"   # WebRTC
@@ -32,10 +35,63 @@ services:
     depends_on: [postgres, redis]
     networks: [internal]
 
-  vision:
-    build:
+  # Fast-path workers, one per camera (docs/02 §7: one vision worker per stream,
+  # camera→worker via config). GPU passthrough verified on this host (spike-00).
+  vision-dock:
+    build: &vision-build
       context: ..
       dockerfile: docker/Dockerfile.vision
+    image: sitework-vision:latest   # all three workers share this one image
+    environment: &vision-env
+      REDIS_URL: redis://redis:6379
+    volumes: &vision-volumes
+      - ../data/models:/models:ro
+    command: ["python3", "-m", "pipelines.vision.pipeline",
+              "--camera-id", "dock_north_01",
+              "--url", "rtsp://mediamtx:8554/dock_north_01"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on: [redis, mediamtx]
+    networks: [internal]
+
+  vision-aisle:
+    build: *vision-build
+    image: sitework-vision:latest
+    environment: *vision-env
+    volumes: *vision-volumes
+    command: ["python3", "-m", "pipelines.vision.pipeline",
+              "--camera-id", "warehouse_aisle_01",
+              "--url", "rtsp://mediamtx:8554/warehouse_aisle_01"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on: [redis, mediamtx]
+    networks: [internal]
+
+  vision-yard:
+    build: *vision-build
+    image: sitework-vision:latest
+    environment: *vision-env
+    volumes: *vision-volumes
+    command: ["python3", "-m", "pipelines.vision.pipeline",
+              "--camera-id", "yard_excavator_01",
+              "--url", "rtsp://mediamtx:8554/yard_excavator_01"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     depends_on: [redis, mediamtx]
     networks: [internal]
 

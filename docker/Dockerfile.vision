@@ -1,18 +1,30 @@
-# Edge vision worker (fast path). M0 stub: plain Python runtime; the CUDA/TensorRT
-# base (nvcr.io/nvidia/tensorrt or nvidia/cuda devel) + GStreamer/OpenCV land in M1
-# after spike-00 records the target GPU.
-FROM python:3.11.11-slim-bookworm
+# Edge vision worker (fast path) — CUDA build.
+# Base matches the validated host stack (torch 2.11.0+cu128 on Ampere, spike-00).
+# Verified 2026-09-16: Docker Desktop GPU passthrough works (nvidia-smi sees the A4500).
+FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04
 
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    PIP_BREAK_SYSTEM_PACKAGES=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       python3 python3-venv python3-pip ffmpeg curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 --version
+
 WORKDIR /app
 
-RUN pip install --no-cache-dir uv
-COPY pyproject.toml ./
-RUN uv pip install --system --no-cache pydantic pyyaml redis
+# Torch cu128 from the PyTorch index (matches host; see pyproject tool.uv.sources).
+RUN pip install --no-cache-dir \
+      torch==2.11.0+cu128 torchvision==0.26.0+cu128 \
+      --index-url https://download.pytorch.org/whl/cu128 \
+    && pip install --no-cache-dir \
+      ultralytics>=8.3 av>=13.0 numpy>=1.26 pydantic>=2.7 pyyaml>=6.0 redis>=5.0
 
 COPY pipelines ./pipelines
 COPY config ./config
 
-# M0: idle heartbeat so `make up` boots the full stack. M1 replaces with pipeline.py.
-CMD ["python", "-c", "import time; print('vision stub up (M1 replaces with fast-path pipeline)'); \
-[t.time.sleep(60) for _ in iter(int, 1)]"]
+# Weights mount: data/models is mounted at /models (git-ignored on host).
+ENV YOLO_WEIGHTS=/models/yolo11s.pt
+CMD ["python", "-m", "pipelines.vision.pipeline"]

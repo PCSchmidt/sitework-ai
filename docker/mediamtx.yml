@@ -1,0 +1,12 @@
+# MediaMTX config: loop the 3 transcoded demo clips as RTSP streams (docs/02 §1).
+# Paths are inside the mediamtx container (/clips is the assets/clips mount).
+paths:
+  dock_north_01:
+    runOnDemand: ffmpeg -re -stream_loop -1 -i /clips/forklift_workers_interaction_1080p.mp4 -c copy -f rtsp rtsp://localhost:8554/dock_north_01
+    runOnDemandRestart: yes
+  warehouse_aisle_01:
+    runOnDemand: ffmpeg -re -stream_loop -1 -i /clips/worker_walking_aisle_1080p.mp4 -c copy -f rtsp rtsp://localhost:8554/warehouse_aisle_01
+    runOnDemandRestart: yes
+  yard_excavator_01:
+    runOnDemand: ffmpeg -re -stream_loop -1 -i /clips/excavator_site_01_1080p.mp4 -c copy -f rtsp rtsp://localhost:8554/yard_excavator_01
+    runOnDemandRestart: yes

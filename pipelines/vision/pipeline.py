@@ -72,10 +72,12 @@ def run_stream(
                 )
 
         # Calibration is an M2 artifact; absent config -> invalid, rules stay zone-only.
+        # NOTE: finite sentinel (not inf) — Pydantic JSON-serializes inf as null,
+        # which fails schema validation on read (caught by the M1 Redis gate).
         quality = (
             CalibrationQuality.from_rms(calibration_rms_px)
             if calibration_rms_px is not None
-            else CalibrationQuality(rms_px=float("inf"), valid=False)
+            else CalibrationQuality(rms_px=9999.0, valid=False)
         )
 
         msg = TrackletFrame(
@@ -91,3 +93,30 @@ def run_stream(
             maxlen=STREAM_MAXLEN,
             approximate=True,
         )
+
+
+def main() -> None:
+    import argparse
+    import os
+
+    ap = argparse.ArgumentParser(description="Fast-path vision worker (docs/02)")
+    ap.add_argument("--camera-id", required=True)
+    ap.add_argument("--url", required=True, help="RTSP URL or MP4 path")
+    ap.add_argument("--weights", default=os.environ.get("YOLO_WEIGHTS", "yolo11s.pt"))
+    ap.add_argument("--device", default="cuda:0")
+    ap.add_argument("--redis", default=os.environ.get("REDIS_URL", "redis://localhost:6379"))
+    ap.add_argument("--imgsz", type=int, default=640)
+    ap.add_argument("--confidence-gate", type=float, default=0.4)
+    args = ap.parse_args()
+
+    detector = Detector(
+        weights=args.weights,
+        device=args.device,
+        confidence_gate=args.confidence_gate,
+        imgsz=args.imgsz,
+    )
+    run_stream(args.camera_id, args.url, detector, redis_url=args.redis)
+
+
+if __name__ == "__main__":
+    main()
