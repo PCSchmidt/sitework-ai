@@ -4,11 +4,16 @@ M1 scope: single stream, detector + Ultralytics ByteTrack, TrackletFrame
 published to Redis Streams at ~10 Hz. M2 adds ground-plane projection: if a
 calibration exists for the camera (`config/calibration/{camera_id}.json`,
 written by `pipelines.geometry.calibrate`), each track's bottom-center pixel
-is projected through the homography to `ground_point_m`, velocity is a
-finite difference against the track's previous ground point, and `zone_ids`
-comes from `pipelines.geometry.zones.ZoneEngine`. Without a valid
-calibration, ground_point_m/velocity_mps stay null and zone_ids empty, per
-schema (rules requiring metric distance degrade to zone-only, docs/04 §3).
+is projected through the homography to `ground_point_m`, and `zone_ids`
+comes from `pipelines.geometry.zones.ZoneEngine` -- both computed whenever
+*any* calibration exists, valid or not, since zone containment tolerates
+imprecision that metric distance/speed can't. velocity_mps/speed_mps
+require a calibration that clears the hard RMS gate
+(`calibration.quality.valid`); without one, or with an invalid one, they
+stay null and RuleEngine skips proximity/speed evaluation for the frame
+(zone_intrusion still runs off zone_ids) -- the degrade-to-zone-only
+behavior docs/04 §3 describes. No calibration at all: everything stays
+null/empty.
 
 Each TrackletFrame is also run through pipelines.vision.rules.RuleEngine;
 any resulting TriggerEvents are published to the `trigger_events` stream
@@ -100,17 +105,18 @@ def run_stream(
                 velocity_mps: tuple[float, float] | None = None
                 speed_mps: float | None = None
                 zone_ids: list[str] = []
-                if calibration is not None and calibration.quality.valid:
+                if calibration is not None:
                     ground_point_m = calibration.homography.apply(_bottom_center(bbox_px))
-                    if track_id in prev_ground:
-                        (px, py), pt = prev_ground[track_id]
-                        dt = now - pt
-                        if dt > 0:
-                            vx = (ground_point_m[0] - px) / dt
-                            vy = (ground_point_m[1] - py) / dt
-                            velocity_mps = (vx, vy)
-                            speed_mps = (vx**2 + vy**2) ** 0.5
-                    prev_ground[track_id] = (ground_point_m, now)
+                    if calibration.quality.valid:
+                        if track_id in prev_ground:
+                            (px, py), pt = prev_ground[track_id]
+                            dt = now - pt
+                            if dt > 0:
+                                vx = (ground_point_m[0] - px) / dt
+                                vy = (ground_point_m[1] - py) / dt
+                                velocity_mps = (vx, vy)
+                                speed_mps = (vx**2 + vy**2) ** 0.5
+                        prev_ground[track_id] = (ground_point_m, now)
                     if zone_engine is not None:
                         zone_ids = zone_engine.zone_ids_containing(camera_id, ground_point_m)
 

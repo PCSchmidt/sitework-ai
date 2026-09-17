@@ -5,15 +5,22 @@ from pipelines.schemas import CalibrationQuality, Track, TrackletFrame, TrackSta
 from pipelines.vision.rules import RuleEngine
 
 VALID_QUALITY = CalibrationQuality(rms_px=1.0, valid=True)
+INVALID_QUALITY = CalibrationQuality(rms_px=105.0, valid=False)
 STATE = TrackState(cov_trace=0.0, age_frames=1, hits=1)
 
 
-def _frame(camera_id: str, frame_ts: float, seq: int, tracks: list[Track]) -> TrackletFrame:
+def _frame(
+    camera_id: str,
+    frame_ts: float,
+    seq: int,
+    tracks: list[Track],
+    quality: CalibrationQuality = VALID_QUALITY,
+) -> TrackletFrame:
     return TrackletFrame(
         camera_id=camera_id,
         frame_ts=frame_ts,
         seq=seq,
-        calibration_quality=VALID_QUALITY,
+        calibration_quality=quality,
         tracks=tracks,
     )
 
@@ -203,6 +210,48 @@ def test_unsupported_rule_kinds_are_ignored_without_error() -> None:
     engine = RuleEngine(RulesConfig(rules=[wrong_way_rule]))
     events = engine.process(_frame("cam1", 0.0, 0, [_track(1, "vehicle", ["zoneA"])]))
     assert events == []
+
+
+# ---- degrade-to-zone-only when calibration is invalid (docs/04 §3) --------
+
+
+def test_proximity_does_not_fire_with_invalid_calibration() -> None:
+    engine = RuleEngine(RulesConfig(rules=[PROXIMITY_RULE]))
+    person = _track(1, "person", ground_point_m=(0.0, 0.0))
+    vehicle = _track(2, "vehicle", ground_point_m=(1.0, 0.0))
+    for ts in range(4):
+        events = engine.process(
+            _frame("cam1", float(ts), ts, [person, vehicle], quality=INVALID_QUALITY)
+        )
+        assert events == []
+
+
+def test_speed_does_not_fire_with_invalid_calibration() -> None:
+    engine = RuleEngine(RulesConfig(rules=[SPEED_RULE]))
+    events = engine.process(
+        _frame(
+            "cam1",
+            0.0,
+            0,
+            [_track(1, "forklift", ["zoneA"], speed_mps=3.0)],
+            quality=INVALID_QUALITY,
+        )
+    )
+    assert events == []
+
+
+def test_zone_intrusion_still_fires_with_invalid_calibration() -> None:
+    """zone_intrusion only needs zone_ids (containment), not metric distance --
+    it must NOT degrade when calibration is invalid, unlike proximity/speed."""
+    engine = RuleEngine(RulesConfig(rules=[INTRUSION_RULE]))
+    fired_at = []
+    for ts in range(5):
+        events = engine.process(
+            _frame("cam1", float(ts), ts, [_track(1, "person", ["zoneA"])], quality=INVALID_QUALITY)
+        )
+        if events:
+            fired_at.append(ts)
+    assert fired_at == [3]
 
 
 # ---- cooldown_key / event shape -------------------------------------------

@@ -164,6 +164,14 @@ class RuleEngine:
         assert rule.radius_m is not None and rule.duration_s is not None
         events: list[TriggerEvent] = []
 
+        # Needs trustworthy metric distance; degrades to zone-only when the
+        # calibration doesn't clear the hard RMS gate (docs/04 §3). Unlike
+        # zone_intrusion, ground_point_m alone isn't enough here -- pipeline.py
+        # still populates it for an invalid calibration (zone containment
+        # tolerates the imprecision), but proximity's distance math doesn't.
+        if not frame.calibration_quality.valid:
+            return events
+
         persons = [
             t
             for t in frame.tracks
@@ -242,6 +250,12 @@ class RuleEngine:
     def _eval_speed(self, frame: TrackletFrame, rule: Rule) -> list[TriggerEvent]:
         assert rule.limit_mps is not None
         events: list[TriggerEvent] = []
+        # Needs trustworthy metric speed; degrades to zone-only when invalid
+        # (docs/04 §3). speed_mps is None for an invalid calibration anyway
+        # (pipeline.py), but check explicitly so RuleEngine is correct on its
+        # own, not just given how the one current producer happens to behave.
+        if not frame.calibration_quality.valid:
+            return events
         for track in frame.tracks:
             if track.speed_mps is None or not _in_rule_zone(track.zone_ids, rule):
                 continue
