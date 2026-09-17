@@ -1,0 +1,40 @@
+name: dev-own-footage
+version: "2026-09-17"
+url: N/A (personal footage, not a published dataset)
+license: owned by the project author; private use only
+redistribution: prohibited   # personal residence footage -- do not publish/share
+gated: n/a
+recorded: 2026-09-17
+local_path: assets/clips
+content:
+  type: phone video (h264 mp4, transcoded from source HEVC), portrait 1080x1920
+use_in_project:
+  - validating pipelines/geometry/vanishing_point.py (single-view-metrology
+    calibration) against real geometry -- the stock demo clips (mendeley/
+    hf-warehouse/mot17/pexels) don't have unambiguous orthogonal structure
+    visible for either calibration method (docs/12-roadmap.md M2 notes,
+    2026-09-17 entry)
+  - camera dining_room_01 (config/cameras.yaml), zone dining_room_test_zone
+    (config/zones.yaml), rule dining_room_test_intrusion (config/rules.yaml) --
+    all explicitly test fixtures, not a site demo camera
+explicitly_not:
+  - a demo/portfolio camera feed -- this is a calibration-tooling test
+    fixture only; keep it out of any public demo narrative
+clips:
+  - file: dining_room_01.mp4
+    role: camera dining_room_01 -- room-corner shot (two baseboards meeting,
+      floor, a rug, furniture) used to hand-pick real vanishing-point lines
+    tech: 1080x1920 (portrait), h264, ~43s, transcoded via ffmpeg from the
+      original phone capture (HEVC, rotation metadata baked in on transcode)
+    sha256: cb609c2057e6b113f20b414e201d73602a9a00d9a30903ca85d65e9ff7d99a78
+notes: >
+  Clips are git-ignored (*.mp4), same as the Pexels set -- the raw video never
+  enters git history, only this manifest and the derived calibration numbers
+  (config/calibration/dining_room_01.json) do. Calibration from this footage
+  FAILS the hard RMS gate (valid=false, rms_px~105 vs RMS_GATE_PX=2.0) --
+  real hand-picked lines from a phone photo aren't survey-grade precision.
+  That's the expected, honest outcome, not a bug: it demonstrates
+  zone_intrusion correctly still firing (zone containment tolerates the
+  imprecision) while proximity/speed correctly stay inert (docs/04 §3
+  degrade-to-zone-only), end-to-end, for the first time with real (not
+  synthetic) data.

@@ -18,3 +18,14 @@ cameras:
     width: 1280
     height: 720
     confidence_gate: 0.4
+  # Calibration-tooling test fixture, not a site demo camera (docs/12 M2):
+  # own footage of a room corner, used to validate the vanishing-point
+  # calibration method against real geometry rather than synthetic-only
+  # tests. See config/calibration/dining_room_01.json (fails the hard RMS
+  # gate -- zone_intrusion works, proximity/speed correctly stay inert).
+  - id: dining_room_01
+    name: Dining Room 01 (calibration test fixture)
+    rtsp_url: rtsp://mediamtx:8554/dining_room_01
+    width: 1080
+    height: 1920
+    confidence_gate: 0.4

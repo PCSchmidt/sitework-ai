@@ -23,3 +23,13 @@ rules:
     zone_ids: [dock_north]
     limit_mps: 2.2
     cooldown_s: 60
+  # Calibration test fixture (config/cameras.yaml dining_room_01) -- exercises
+  # zone_intrusion end-to-end against a real (though hard-gate-failing)
+  # calibration, demonstrating the degrade-to-zone-only design actually works.
+  - id: dining_room_test_intrusion
+    kind: zone_intrusion
+    description: Test fixture -- track dwelling in the dining-room test zone.
+    citation: N/A (calibration tooling validation, not a site policy)
+    zone_ids: [dining_room_test_zone]
+    dwell_s: 2.0
+    cooldown_s: 60

@@ -19,3 +19,14 @@ zones:
     active: true
     min_calibration_quality: 2.0
     polygon_m: [[8.0, 8.0], [16.0, 8.0], [16.0, 16.0], [8.0, 16.0]]
+  # Calibration test fixture (see config/cameras.yaml dining_room_01). Polygon
+  # is the real rug/floor area near the room corner, computed by projecting
+  # its pixel-space bounding box through config/calibration/dining_room_01.json
+  # -- ground_intrusion works despite that calibration failing the hard gate
+  # (zone containment tolerates the imprecision; proximity/speed wouldn't).
+  - id: dining_room_test_zone
+    camera_id: dining_room_01
+    kind: generic
+    active: true
+    min_calibration_quality: 2.0
+    polygon_m: [[2.659, 2.099], [3.228, 0.750], [1.703, 0.405], [1.370, 1.112]]

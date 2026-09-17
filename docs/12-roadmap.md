@@ -66,9 +66,28 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
       ceiling, adjacent rack bays — nothing usable). **Conclusion: neither stock clip has
       calibration-grade geometry for either method; this is a property of the footage (not
       composed for calibration), not a gap in the tooling, which is real and independently
-      verified.** Real per-camera calibration stays deferred — cheapest realistic path is a
-      short, deliberately-composed clip (any space, floor + two walls clearly visible), not
-      necessarily a real job site.
+      verified.**
+      **Update 2026-09-17: real footage tried, real bug found and fixed, real end-to-end
+      success.** A short deliberately-composed phone clip (a room corner, two baseboards
+      meeting, floor, a rug — not a job site, just a space with visible orthogonal structure)
+      exposed a genuine bug: `ground_homography_from_vanishing_points` rejected valid real-world
+      line picks as "degenerate" because it demanded near-exact orthogonality (1e-3), which only
+      synthetic test data ever satisfies. Fixed by projecting onto the nearest true rotation via
+      SVD instead of rejecting (regression test: `test_ground_homography_tolerates_imprecise_real_world_line_picks`).
+      `calibrate.py` now supports `--method vanishing_point` end-to-end (not just as a library),
+      producing a real `config/calibration/dining_room_01.json` — which **fails** the hard RMS
+      gate (`valid=false`, `rms_px≈105` vs `RMS_GATE_PX=2.0`; hand-picked lines from a phone photo
+      aren't survey precision, an honest and expected result, not a bug). Using this real
+      (gate-failing) calibration also surfaced and fixed a real pipeline gap: `pipeline.py` was
+      disabling zone containment entirely whenever calibration was invalid, contradicting docs/04
+      §3's "degrade to zone-only" design — only proximity/speed should require the hard gate.
+      Fixed in `pipeline.py` + `rules.py` (3 new tests). End-to-end simulation with the real
+      calibration confirms the intended behavior exactly: `zone_intrusion` fires correctly via
+      `dining_room_test_zone`/`dining_room_test_intrusion` (new test-fixture camera/zone/rule,
+      clearly marked as such, not a site demo), while `proximity`/`speed` correctly stay inert.
+      Real per-camera calibration for the *actual* demo cameras (dock_north_01 etc.) still stays
+      deferred — this fixture validates the tooling and the degrade-safely design against real
+      data, it doesn't calibrate a real site.
 - [x] Ground-plane projection + metric velocity; zone polygon engine (Shapely, precomputed) —
       `pipelines/geometry/zones.py` (ZoneEngine) + wired into `pipeline.py`: bottom-center bbox
       projected through H -> `ground_point_m`, finite-difference velocity/speed, zone containment
