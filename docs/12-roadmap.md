@@ -45,7 +45,19 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
       test_calibrate.py); CLI takes a point-correspondences JSON rather than interactive frame
       clicks (scriptable/testable — clicking is just one way to produce that file). Actual per-site
       `config/calibration/{camera_id}.json` files still need a human to pick real ground points
-      against camera footage + site measurements — not yet run against real demo footage.
+      against camera footage + site measurements — not yet run against real demo footage. Tried
+      the demo clip directly (dock_north_01 flagship frame): its only clean reference geometry is
+      two collinear wheel-contact points on one side of a forklift — not enough for a >=4-point,
+      non-collinear DLT fit. Added a second calibration method for exactly this case —
+      `pipelines/geometry/vanishing_point.py`: single-view metrology from vanishing points of
+      structural parallel lines (roof trusses, wall-floor edges, a mast) instead of a clean
+      reference object, with one required scale anchor (assumed camera height). 10 tests
+      (`tests/test_vanishing_point.py`) verify a full synthetic-camera round trip, including a
+      real sign ambiguity in the recovered axes (a vanishing point encodes a direction, not a
+      signed ray) resolved by searching the 4 valid proper-rotation sign combinations. Not yet
+      run against the actual demo frame — still needs real line picks + an assumed camera height,
+      and any result is an engineering estimate, not a surveyed one, same as the point-correspondence
+      method above.
 - [x] Ground-plane projection + metric velocity; zone polygon engine (Shapely, precomputed) —
       `pipelines/geometry/zones.py` (ZoneEngine) + wired into `pipeline.py`: bottom-center bbox
       projected through H -> `ground_point_m`, finite-difference velocity/speed, zone containment
