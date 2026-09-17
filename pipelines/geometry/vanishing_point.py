@@ -34,6 +34,7 @@ prefer `Homography.solve()` whenever real ground-truth points exist.
 from __future__ import annotations
 
 import itertools
+import math
 
 import numpy as np
 
@@ -92,6 +93,33 @@ def _direction(v: Point, principal_point: Point, f: float) -> np.ndarray:
     d = np.array([v[0] - cx, v[1] - cy, f])
     result: np.ndarray = d / np.linalg.norm(d)
     return result
+
+
+def orthogonality_residual_deg(
+    v_ground1: Point, v_ground2: Point, v_vertical: Point, principal_point: Point
+) -> tuple[float, float]:
+    """How far the vertical vanishing point is from truly perpendicular to each
+    ground direction, in degrees, *before* `ground_homography_from_vanishing_points`
+    silently corrects for it via SVD.
+
+    The two ground vanishing points are orthogonal to each other by
+    construction (that's what `estimate_focal_length` solves for), so only
+    the vertical axis's angle to each of them is informative here. Near 0
+    means the three vanishing points are consistent with genuinely
+    orthogonal 3D directions -- i.e. the line picks were precise and the
+    scene really is rectilinear. Several degrees or more is a real
+    warning sign about the picks (or a lens-distortion/non-rectilinear
+    scene violating the pinhole assumption), not just numerical noise;
+    `calibrate_from_lines` converts this into a pixel-equivalent quality
+    proxy comparable to the point-correspondence method's RMS gate.
+    """
+    f = estimate_focal_length(v_ground1, v_ground2, principal_point)
+    r1 = _direction(v_ground1, principal_point, f)
+    r2 = _direction(v_ground2, principal_point, f)
+    r3 = _direction(v_vertical, principal_point, f)
+    theta1 = math.degrees(math.asin(min(1.0, abs(float(r1 @ r3)))))
+    theta2 = math.degrees(math.asin(min(1.0, abs(float(r2 @ r3)))))
+    return (theta1, theta2)
 
 
 def ground_homography_from_vanishing_points(

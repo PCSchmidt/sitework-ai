@@ -6,56 +6,21 @@ from pipelines.geometry.vanishing_point import (
     calibrate_from_vanishing_points,
     estimate_focal_length,
     ground_homography_from_vanishing_points,
+    orthogonality_residual_deg,
     vanishing_point,
 )
 
-# Synthetic pinhole camera (verified interactively before writing this module):
-# World: X=right, Y=depth (away from camera base), Z=up, ground plane at Z=0.
-# Camera: Xc=right, Yc=down (image convention), Zc=forward (optical axis).
-F = 800.0
-PRINCIPAL_POINT = (320.0, 240.0)
-CAMERA_HEIGHT_M = 4.0
-PITCH_DEG = 30.0
-YAW_DEG = 20.0  # without yaw, world-X lines run exactly horizontal in the image and
-# never converge -- a real degenerate case, but not what a real oblique photo looks like.
-
-_R0 = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]], dtype=float)
-_theta = np.radians(PITCH_DEG)
-_RX = np.array(
-    [[1, 0, 0], [0, np.cos(_theta), -np.sin(_theta)], [0, np.sin(_theta), np.cos(_theta)]]
+from _synthetic_camera import (
+    CAMERA_HEIGHT_M,
+    GROUND_LINES_1,
+    GROUND_LINES_2,
+    GROUND_REFERENCE_PX,
+    PRINCIPAL_POINT,
+    VERTICAL_LINES,
+    F,
+    project,
 )
-_psi = np.radians(YAW_DEG)
-_RZ = np.array([[np.cos(_psi), -np.sin(_psi), 0], [np.sin(_psi), np.cos(_psi), 0], [0, 0, 1]])
-R = _R0 @ _RX @ _RZ
-K = np.array([[F, 0, PRINCIPAL_POINT[0]], [0, F, PRINCIPAL_POINT[1]], [0, 0, 1]])
-C = np.array([0.0, 0.0, CAMERA_HEIGHT_M])
-T = -R @ C
-
-
-def project(world_pt: tuple[float, float, float]) -> tuple[float, float]:
-    cam = R @ np.array(world_pt) + T
-    img = K @ cam
-    return (float(img[0] / img[2]), float(img[1] / img[2]))
-
-
-def _theoretical_vp(direction: tuple[float, float, float]) -> tuple[float, float]:
-    d_cam = R @ np.array(direction)
-    v = K @ d_cam
-    return (float(v[0] / v[2]), float(v[1] / v[2]))
-
-
-# Ground-plane lines: varying X at fixed Y (direction 1, "lateral"), varying Y at
-# fixed X (direction 2, "depth" -- like roof trusses receding from the camera).
-GROUND_LINES_1 = [
-    (project((0.0, y, 0.0)), project((5.0, y, 0.0))) for y in (3.0, 8.0, 15.0)
-]
-GROUND_LINES_2 = [
-    (project((x, 2.0, 0.0)), project((x, 20.0, 0.0))) for x in (-3.0, 0.0, 3.0)
-]
-VERTICAL_LINES = [
-    (project((x, 6.0, 0.0)), project((x, 6.0, 2.5))) for x in (-2.0, 0.0, 2.0)
-]
-GROUND_REFERENCE_PX = project((0.0, 3.0, 0.0))  # a pixel known to be on the ground
+from _synthetic_camera import theoretical_vp as _theoretical_vp
 
 
 def test_vanishing_point_recovers_ground_lateral_direction() -> None:
@@ -101,6 +66,25 @@ def test_estimate_focal_length_rejects_non_orthogonal_pair() -> None:
     # (not a valid orthogonal ground/ground or ground/vertical pair)
     with pytest.raises(ValueError, match="f\\^2"):
         estimate_focal_length((400.0, 300.0), (500.0, 350.0), PRINCIPAL_POINT)
+
+
+def test_orthogonality_residual_near_zero_for_exact_synthetic_data() -> None:
+    v1 = vanishing_point(GROUND_LINES_1)
+    v2 = vanishing_point(GROUND_LINES_2)
+    v3 = vanishing_point(VERTICAL_LINES)
+    theta1, theta2 = orthogonality_residual_deg(v1, v2, v3, PRINCIPAL_POINT)
+    assert theta1 == pytest.approx(0.0, abs=0.1)
+    assert theta2 == pytest.approx(0.0, abs=0.1)
+
+
+def test_orthogonality_residual_grows_with_a_bad_vertical_pick() -> None:
+    v1 = vanishing_point(GROUND_LINES_1)
+    v2 = vanishing_point(GROUND_LINES_2)
+    # a vertical line family that isn't actually vertical in 3D
+    bad_vertical = [((100.0, 100.0), (300.0, 400.0)), ((500.0, 50.0), (600.0, 500.0))]
+    v3_bad = vanishing_point(bad_vertical)
+    theta1, theta2 = orthogonality_residual_deg(v1, v2, v3_bad, PRINCIPAL_POINT)
+    assert max(theta1, theta2) > 5.0
 
 
 def test_ground_homography_round_trip_recovers_world_points() -> None:

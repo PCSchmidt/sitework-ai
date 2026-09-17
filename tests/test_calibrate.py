@@ -7,10 +7,21 @@ import pytest
 from pipelines.geometry.calibrate import (
     CalibrationError,
     calibrate,
+    calibrate_from_lines,
     load_correspondences,
+    load_lines,
     main,
 )
 from pipelines.schemas import RMS_GATE_PX
+
+from _synthetic_camera import (
+    CAMERA_HEIGHT_M,
+    GROUND_LINES_1,
+    GROUND_LINES_2,
+    GROUND_REFERENCE_PX,
+    PRINCIPAL_POINT,
+    VERTICAL_LINES,
+)
 
 CLEAN_ROWS = [
     {"image_px": [0.0, 0.0], "world_m": [0.0, 0.0]},
@@ -118,3 +129,109 @@ def test_main_exits_nonzero_when_gate_fails(
         main()
     # still written for auditability, per the tool's contract
     assert (out_dir / "dock_north_01.json").exists()
+
+
+# ---- vanishing_point method -------------------------------------------
+
+
+def _lines_payload() -> dict[str, object]:
+    return {
+        "ground_lines_1": [list(pt) for pt in GROUND_LINES_1],
+        "ground_lines_2": [list(pt) for pt in GROUND_LINES_2],
+        "vertical_lines": [list(pt) for pt in VERTICAL_LINES],
+        "principal_point": list(PRINCIPAL_POINT),
+        "ground_reference_px": list(GROUND_REFERENCE_PX),
+    }
+
+
+def _write_lines(tmp_path: Path, payload: dict[str, object]) -> Path:
+    path = tmp_path / "lines.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_load_lines_round_trips(tmp_path: Path) -> None:
+    path = _write_lines(tmp_path, _lines_payload())
+    data = load_lines(path)
+    assert data["principal_point"] == list(PRINCIPAL_POINT)
+
+
+def test_load_lines_rejects_missing_keys(tmp_path: Path) -> None:
+    payload = _lines_payload()
+    del payload["vertical_lines"]
+    path = _write_lines(tmp_path, payload)
+    with pytest.raises(CalibrationError, match="vertical_lines"):
+        load_lines(path)
+
+
+def test_calibrate_from_lines_passes_gate_for_exact_synthetic_data() -> None:
+    record = calibrate_from_lines(
+        "dining_room_01",
+        GROUND_LINES_1,
+        GROUND_LINES_2,
+        VERTICAL_LINES,
+        PRINCIPAL_POINT,
+        CAMERA_HEIGHT_M,
+        GROUND_REFERENCE_PX,
+    )
+    assert record["method"] == "vanishing_point"
+    assert record["valid"] is True
+    assert record["rms_px"] < RMS_GATE_PX
+    assert record["orthogonality_residual_deg"] == pytest.approx(0.0, abs=0.1)
+
+
+def test_calibrate_from_lines_fails_gate_for_a_bad_vertical_pick() -> None:
+    # a vertical line family that isn't actually vertical in 3D -- real
+    # mis-picked lines, not just numerical noise
+    bad_vertical = [((100.0, 100.0), (300.0, 400.0)), ((500.0, 50.0), (600.0, 500.0))]
+    record = calibrate_from_lines(
+        "dining_room_01",
+        GROUND_LINES_1,
+        GROUND_LINES_2,
+        bad_vertical,
+        PRINCIPAL_POINT,
+        CAMERA_HEIGHT_M,
+        GROUND_REFERENCE_PX,
+    )
+    assert record["valid"] is False
+    assert record["rms_px"] > RMS_GATE_PX
+
+
+def test_main_vanishing_point_writes_calibration_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lines_path = _write_lines(tmp_path, _lines_payload())
+    out_dir = tmp_path / "calibration"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "calibrate.py",
+            "--method",
+            "vanishing_point",
+            "--camera-id",
+            "dining_room_01",
+            "--lines",
+            str(lines_path),
+            "--camera-height",
+            str(CAMERA_HEIGHT_M),
+            "--out-dir",
+            str(out_dir),
+        ],
+    )
+    main()  # clean synthetic lines pass the gate
+    out_file = out_dir / "dining_room_01.json"
+    assert out_file.exists()
+    data = json.loads(out_file.read_text(encoding="utf-8"))
+    assert data["method"] == "vanishing_point"
+    assert data["valid"] is True
+
+
+def test_main_requires_lines_and_camera_height_for_vanishing_point_method(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["calibrate.py", "--method", "vanishing_point", "--camera-id", "dining_room_01"],
+    )
+    with pytest.raises(SystemExit):
+        main()
