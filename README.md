@@ -56,7 +56,7 @@ The thing that makes it more than "YOLO plus an LLM wrapper":
 | --- | --- |
 | Deployment | Local only, `docker compose up` (mediamtx + redis + postgres + api + vision workers + agent) |
 | Fast path | YOLO11s (Ultralytics) + ByteTrack, homography/vanishing-point calibration, Shapely zone engine, deterministic rule engine (proximity, zone-dwell, speed) |
-| Slow path | [Prime Agent](https://github.com/PCSchmidt/prime-agent) (the author's own agent harness) driven headless over a JSON-lines RPC protocol; per-incident trajectory-verification prompt; Band-3 recomputation gate |
+| Slow path | [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent) — Prime Intellect's open-source [RLM](https://www.primeintellect.ai/blog/rlm) (Recursive Language Model) agent — driven headless over a JSON-lines RPC protocol; per-incident trajectory-verification prompt; Band-3 recomputation gate |
 | Broker | Redis Streams, time-based retention (`XTRIM MINID`), consumer groups for crash-safe agent consumption |
 | Schemas | Pydantic v2, single source of truth, JSON Schema exported for a future TS dashboard |
 | Benchmark (M1) | YOLO11s @ 35 FPS single-stream 1080p on an RTX A4500 (spike-00); thermal-throttle finding recorded honestly alongside the clean number |
@@ -68,26 +68,20 @@ The thing that makes it more than "YOLO plus an LLM wrapper":
 
 ```mermaid
 flowchart TD
-    subgraph fast["Fast path — deterministic, every frame"]
-        SRC["MediaMTX<br>looped demo clips as RTSP"] --> DET["Detector<br>YOLO11s (Ultralytics)"]
-        DET --> TRK["ByteTrack + Kalman<br>per-camera tracker"]
-        TRK --> GEOM["pipelines/geometry<br>homography / vanishing-point calibration<br>ground-plane projection"]
-        GEOM --> ZONE["ZoneEngine (Shapely)<br>+ RuleEngine<br>proximity · zone_intrusion · speed"]
-        ZONE -->|TrackletFrame, ~10Hz| BROKER[("Redis Streams<br>tracklets:{camera} · trigger_events")]
-        ZONE -->|TriggerEvent| BROKER
-        ZONE --> EVID["EvidenceCapture<br>tracks.jsonl + clip.mp4 per trigger"]
+    SRC["MediaMTX<br>looped demo clips as simulated RTSP cameras"] --> DET
+    subgraph fast["Fast path — deterministic, every frame, zero LLM cost"]
+        DET["YOLO11s detector<br>+ ByteTrack / Kalman tracker"] --> GEOM["pipelines/geometry<br>homography / vanishing-point calibration"]
+        GEOM --> RULES["Shapely zone engine + RuleEngine<br>proximity · zone_intrusion · speed"]
     end
-    BROKER -->|consumer group, crash-safe| WORKER
-    subgraph slow["Slow path — event-driven, seconds"]
-        WORKER["agent/worker.py<br>queue dispatcher"] --> ADAPTER["agent/prime_adapter.py<br>RPC JSON-lines driver<br>external timeout+kill"]
-        ADAPTER --> PA["prime-agent --mode rpc<br>IPython REPL, verifies kinematics<br>by executing code"]
-        PA --> RESULT["result.json<br>KinematicsVerdict"]
-        RESULT --> GATE["agent/band3.py<br>recomputation cross-check"]
-        GATE -->|pass| CONFIRMED["IncidentRecord<br>state=confirmed"]
-        GATE -->|fail| REVIEW["IncidentRecord<br>state=needs_review<br>evidence retained"]
+    RULES --> BROKER[("Redis Streams<br>tracklets · trigger_events")]
+    RULES --> EVID["EvidenceCapture<br>tracks.jsonl + clip.mp4"]
+    BROKER --> WORKER
+    subgraph slow["Slow path — event-driven, on trigger only"]
+        WORKER["agent/worker.py<br>consumer-group queue dispatcher"] --> ADAPTER["agent/prime_adapter.py<br>RPC driver, external timeout+kill"]
+        ADAPTER --> PA["Prime Agent (RLM)<br>verifies kinematics via code execution"]
+        PA --> GATE["agent/band3.py<br>independent recomputation cross-check"]
     end
-    CONFIRMED --> API["api/ (FastAPI, M0 stub —<br>REST+WS lands at M4)"]
-    REVIEW --> API
+    GATE --> REC[("IncidentRecord<br>confirmed / needs_review")]
 ```
 
 Where things live:
@@ -114,8 +108,8 @@ Where things live:
 
 Requires Docker, [uv](https://docs.astral.sh/uv/) (Python 3.11+), and — only if you want
 to run the real agent slow path, not just the fast path — a working local install of
-[`prime-agent`](https://github.com/PCSchmidt/prime-agent) (private package; see
-`docker/vendor/README.md` for the current vendoring workaround).
+[`prime-agent`](https://github.com/PrimeIntellect-ai/prime-agent) (not yet on the public
+npm registry; see `docker/vendor/README.md` for the current vendoring workaround).
 
 ```bash
 git clone https://github.com/PCSchmidt/sitework-ai
@@ -236,8 +230,8 @@ All numbers are reproducible from this repo:
   still open.** Both calibration methods are validated end-to-end against real footage of
   a personal test fixture, not the actual demo camera angles — that's a genuine,
   unresolved gap, not a documentation nit.
-- **`prime-agent` isn't installable in CI yet.** It's the author's own product and isn't
-  on the public npm registry (`"private": true`); `Dockerfile.agent` uses a vendored
+- **`prime-agent` isn't installable in CI yet.** It isn't on the public npm registry
+  (`"private": true` in its own `package.json`); `Dockerfile.agent` uses a vendored
   tarball as an interim (`docker/vendor/README.md`), and the CI contract test replays a
   real captured transcript rather than driving the live CLI. A private registry (GitHub
   Packages) with build-time auth is the real fix, still owed.
@@ -311,12 +305,19 @@ curl -s http://localhost:8000/healthz     # API stub liveness
 
 ## Engineering context
 
-The slow-path agent is a containerized deployment of
-**[Prime Agent](https://github.com/PCSchmidt/prime-agent)**, the author's own agent
-harness — the same tool used to help build this repository is also, here, a runtime
-component of the system it built. `agent/prime_adapter.py` is the only module allowed to
-invoke it, wrapped in an external timeout the feasibility spike showed was necessary
-regardless of the CLI's own budget flags.
+The slow-path agent is a containerized deployment of **[Prime
+Agent](https://github.com/PrimeIntellect-ai/prime-agent)**, Prime Intellect's open-source
+agent built on their **[RLM](https://www.primeintellect.ai/blog/rlm) (Recursive Language
+Model)** idea: instead of stuffing everything into one model's context window, an RLM
+keeps its own reasoning lean and manages a persistent Python REPL plus recursive calls to
+sub-LLMs to do the heavy lifting — exactly the shape this project needed for an incident
+verifier that must *compute* an answer (execute code against the raw tracklet window)
+rather than *guess* one from a prompt. `agent/prime_adapter.py` is the only module in this
+repo allowed to invoke it, wrapped in an external timeout the feasibility spike showed was
+necessary regardless of the CLI's own budget flags — see
+[docs/prime-agent-feasibility.md](docs/prime-agent-feasibility.md) for the full
+verified-capability writeup and [docs/spikes/spike-01-prime-agent-headless.md](docs/spikes/spike-01-prime-agent-headless.md)
+for the honest results of actually running it headless.
 
 ## License
 

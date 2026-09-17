@@ -1,6 +1,8 @@
 # Feasibility: Prime Agent as an Application Component
 
-**Question:** can Prime Agent (github.com/PCSchmidt/prime-agent) be more than the tool that
+**Question:** can Prime Agent (Prime Intellect's open-source RLM agent,
+github.com/PrimeIntellect-ai/prime-agent — https://www.primeintellect.ai/blog/rlm; used here
+via a personal install/fork, github.com/PCSchmidt/prime-agent) be more than the tool that
 *builds* SiteWatch AI — can it be a **deployed component of the running application**, inside a
 Docker container, processing live incident events?
 
@@ -132,7 +134,7 @@ parsing freeform agent prose.
 | F6 | **Flash-class model tool discipline** (markdown blocks instead of executing, `input()` attempts) | Medium | Known caveat from the concept doc; strict harness policy (non-interactive, single-pass scripts), 2-strike escalation to a stronger model via `set_model` RPC |
 | F7 | **Cost runaway** on autonomous loops | Medium | **Revised by spike-01 Finding 4:** `--autonomous-max-*` flags alone did NOT stop a runaway task (observed 9 turns/130+s against `--autonomous-max-turns 3`). Real mitigation is `PrimeAdapter`'s own external wall-clock timeout + kill (`agent/prime_adapter.py`), with the CLI flags as a secondary, not sole, layer; plus per-incident token accounting (`get_session_stats`) + queue-depth budget alarm (docs/10-cost-model.md) |
 | F8 | **Windows/local dev divergence** | Low | Agent always runs in Linux containers, locally and in reference architecture; host OS irrelevant |
-| F9 | **License/distribution** — it's the author's own product | **Elevated Low → real by spike-01 Finding 1** | `prime-agent`'s `package.json` has `"private": true` — it is NOT on the public npm registry, so `Dockerfile.agent`'s original `npm install -g` fails on any machine but one with it already installed globally. Interim: vendored tarball install (`docker/vendor/`, gitignored, regeneration steps in `docker/vendor/README.md`). Real fix still owed: a private registry (GitHub Packages is the natural fit) with build-time auth, before this image is reproducible by anyone but the author's machine or CI with that auth configured |
+| F9 | **License/distribution** — third-party OSS (Prime Intellect's RLM agent), not published to npm | **Elevated Low → real by spike-01 Finding 1** | `prime-agent`'s `package.json` has `"private": true` — it is NOT on the public npm registry, so `Dockerfile.agent`'s original `npm install -g` fails on any machine but one with it already installed globally. Interim: vendored tarball install (`docker/vendor/`, gitignored, regeneration steps in `docker/vendor/README.md`). Real fix still owed: a private registry (GitHub Packages is the natural fit) with build-time auth, before this image is reproducible by anyone but the author's machine or CI with that auth configured |
 
 ## 5. De-risking Spike (M3.0 — first task of Milestone 3, ~2 days)
 

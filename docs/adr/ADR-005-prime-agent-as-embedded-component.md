@@ -6,7 +6,8 @@ docs/spikes/spike-01-prime-agent-headless.md (2026-09-17, spike complete)
 ## Context
 The cognitive plane needs: an agent that verifies claims by executing code (REPL), persistent
 specialist sub-agents, scheduled autonomous synthesis, cheap model routing, and headless
-containerized operation. Prime Agent (the author's product) provides all of these — and, verified
+containerized operation. Prime Agent (Prime Intellect's open-source RLM agent,
+github.com/PrimeIntellect-ai/prime-agent) provides all of these — and, verified
 against the installed package, exposes headless integration surfaces: JSON-lines **RPC mode**
 (prompt/steer/set_model/heartbeats/schedules/stats), single-shot print mode, and hard autonomous
 budget flags (`--autonomous-max-turns/-max-tokens/-timeout-ms`).
