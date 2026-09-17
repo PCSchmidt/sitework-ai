@@ -9,6 +9,7 @@ export default defineConfig({
     proxy: {
       '/api': 'http://api:8000',
       '/healthz': 'http://api:8000',
+      '/live/ws': { target: 'ws://api:8000', ws: true },
     },
   },
 })

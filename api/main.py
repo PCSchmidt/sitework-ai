@@ -20,18 +20,39 @@ import asyncio
 import json
 import logging
 import os
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import asyncpg
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse
 from pipelines.config.loader import load_cameras, load_rules, load_zones
 from pydantic import BaseModel
 
 from api import repository
 from api.db import DEFAULT_DSN, create_pool, init_schema
+from api.reports import render_shift_report_html
 
 logger = logging.getLogger(__name__)
+
+# Same volume agent/worker.py writes incident evidence into
+# (`{workspace_root}/incidents/{event_id}/{tracks.jsonl,clip.mp4}`,
+# docker-compose.yml mounts `agent_workspace` read-only into this
+# container at the same path) -- this API never writes here, only serves.
+WORKSPACE_ROOT = Path(os.environ.get("WORKSPACE_ROOT", "./workspace"))
+
+_EVENT_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def _incident_evidence_dir(event_id: str) -> Path:
+    # event_id lands directly in a filesystem path below -- reject anything
+    # that isn't a bare path segment before it ever reaches Path() so a
+    # crafted "../../etc" can't escape WORKSPACE_ROOT.
+    if not _EVENT_ID_RE.match(event_id):
+        raise HTTPException(status_code=404, detail="unknown incident")
+    return WORKSPACE_ROOT / "incidents" / event_id
 
 
 class ConnectionManager:
@@ -185,6 +206,32 @@ async def review_incident(
 async def kpis(request: Request, window: float = 24.0) -> dict[str, object]:
     pool: asyncpg.Pool = request.app.state.pool
     return await repository.kpis(pool, window_hours=window)
+
+
+@app.get("/api/v1/incidents/{event_id}/evidence/tracks")
+def evidence_tracks(event_id: str) -> list[dict[str, object]]:
+    path = _incident_evidence_dir(event_id) / "tracks.jsonl"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="no tracks.jsonl for this incident")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return [json.loads(line) for line in lines if line.strip()]
+
+
+@app.get("/api/v1/incidents/{event_id}/evidence/clip")
+def evidence_clip(event_id: str) -> FileResponse:
+    path = _incident_evidence_dir(event_id) / "clip.mp4"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="no clip.mp4 for this incident")
+    return FileResponse(path, media_type="video/mp4")
+
+
+@app.get("/api/v1/shift-report", response_class=HTMLResponse)
+async def shift_report(request: Request, from_ts: float, to_ts: float) -> HTMLResponse:
+    pool: asyncpg.Pool = request.app.state.pool
+    records = await repository.list_incidents(
+        pool, ts_from=from_ts, ts_to=to_ts, limit=500, offset=0
+    )
+    return HTMLResponse(render_shift_report_html(records, from_ts, to_ts))
 
 
 @app.websocket("/live/ws")

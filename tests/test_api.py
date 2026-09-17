@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from api import repository
 from api.main import app
@@ -121,3 +124,42 @@ async def test_ws_receives_incident_created_push(client: TestClient, pg_pool) ->
         message = ws.receive_json()
     assert message["type"] == "incident.created"
     assert message["data"]["event_id"] == "evt_ws_push"
+
+
+def test_evidence_tracks_404_when_missing(client: TestClient, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("api.main.WORKSPACE_ROOT", tmp_path)
+    resp = client.get("/api/v1/incidents/evt_missing/evidence/tracks")
+    assert resp.status_code == 404
+
+
+def test_evidence_tracks_returns_parsed_frames(
+    client: TestClient, tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr("api.main.WORKSPACE_ROOT", tmp_path)
+    incident_dir = tmp_path / "incidents" / "evt_evidence"
+    incident_dir.mkdir(parents=True)
+    (incident_dir / "tracks.jsonl").write_text(
+        json.dumps({"camera_id": "dock_north_01", "frame_ts": 1.0}) + "\n", encoding="utf-8"
+    )
+    resp = client.get("/api/v1/incidents/evt_evidence/evidence/tracks")
+    assert resp.status_code == 200
+    assert resp.json() == [{"camera_id": "dock_north_01", "frame_ts": 1.0}]
+
+
+def test_evidence_tracks_rejects_path_traversal(client: TestClient) -> None:
+    resp = client.get("/api/v1/incidents/..%2F..%2Fetc/evidence/tracks")
+    assert resp.status_code == 404
+
+
+def test_evidence_clip_404_when_missing(client: TestClient, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("api.main.WORKSPACE_ROOT", tmp_path)
+    resp = client.get("/api/v1/incidents/evt_missing/evidence/clip")
+    assert resp.status_code == 404
+
+
+async def test_shift_report_renders_html(client: TestClient, pg_pool) -> None:
+    await repository.upsert_incident(pg_pool, _record("evt_shift"))
+    resp = client.get("/api/v1/shift-report", params={"from_ts": 0, "to_ts": 1e12})
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "evt_shift" in resp.text

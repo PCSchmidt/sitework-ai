@@ -252,18 +252,45 @@ mocks.
       `websockets`) and would have failed to boot the real API -- fixed. `docker-compose.yml` gets
       a real `agent` service (mounts the host's `~/.prime` harness state, override via
       `PRIME_HARNESS_DIR`) and `api`'s `DATABASE_URL`.
-- [ ] React dashboard: video+boxes overlay, 2D site canvas (tracks, zones), incident feed,
-      **needs_review queue UI** (docs/05 §8) -- not started; needs visual/browser iteration a
-      terminal-only session can't fully verify, scoped as separate follow-up work from the backend
-      slice above
-- [ ] Clip persistence on trigger + evidence viewer -- `EvidenceCapture` already writes
-      `tracks.jsonl`/`clip.mp4` to disk per incident (M2); serving/viewing them through the API is
-      what's still open
-- [ ] Shift report rendering (md → styled HTML/PDF)
-**Exit:** live demo of full loop on 3 simulated streams; S1 smoke test green. **S1 (smoke test) is
-met** for the backend loop (broker -> worker -> Postgres -> WS, verified both on the host and
-inside the real built containers); the "live demo" half of this exit criterion still needs the
-dashboard to be a demo in the portfolio sense, not just a passing script.
+- [x] React dashboard: incident feed with live WS updates, **needs_review queue UI** (docs/05 §8,
+      state filter + review-decision form posting to `/review`), KPI bar, evidence viewer (clip
+      player + tracks.jsonl link), shift-report link -- done 2026-09-17.
+      `ui/src/hooks/useLiveIncidents.ts` loads via REST then keeps the feed live over `/live/ws`,
+      reconnecting with backoff and a REST re-fetch on drop (the WS server has no replay, so a
+      reconnect alone would silently miss anything pushed during the gap). **Not built**: the
+      video+boxes overlay and 2D site canvas from the original scope -- both need `frame.ticker`
+      (live track positions over WS), which docs/06 §5 already flags as unwired; this pass only
+      covers what the current incident-only push actually supports. **Verification note**: no
+      in-session browser/screenshot tool was available, so this wasn't eyeballed in an actual
+      browser. What *was* verified for real: `tsc -b` and `vite build` both clean; the built
+      `docker-api` image restarted with the new code and its new endpoints curl-tested directly;
+      the `ui` dev container restarted with the new `vite.config.ts` proxy and its `/api/v1/*`,
+      `/healthz`, and `/live/ws` routes round-tripped through the exact same proxy path (including
+      the incident-push WS message) a browser would use, via a raw Postgres UPDATE while a
+      websockets client held the proxied connection open.
+- [x] Clip persistence + evidence viewer -- done 2026-09-17. `EvidenceCapture` already wrote
+      `tracks.jsonl`/`clip.mp4` to `{workspace_root}/incidents/{event_id}/` (M2); what was missing
+      was serving them. `docker-compose.yml` now mounts the same `agent_workspace` volume
+      read-only into the `api` service (`WORKSPACE_ROOT=/workspace`); `api/main.py` adds
+      `GET /api/v1/incidents/{event_id}/evidence/{tracks,clip}` (`tracks` returns parsed JSON
+      frames, `clip` streams `clip.mp4` via `FileResponse`, both 404 cleanly when the file doesn't
+      exist -- e.g. every needs_review case where the agent step never ran). `event_id` is
+      regex-validated before it reaches a filesystem path (`^[A-Za-z0-9_.-]+$`) -- a real
+      path-traversal guard, not just a stylistic check, verified with a `..%2F..%2Fetc` request
+      against the live container (404, not a directory listing).
+- [x] Shift report rendering (md → styled HTML) -- done 2026-09-17, scoped honestly: `api/reports.py`
+      renders the incidents in a window (`GET /api/v1/shift-report?from_ts=&to_ts=`) to one styled
+      HTML page, using each incident's own `narrative_md`/`recommended_actions` -- **not** a new
+      T3-synthesized cross-incident summary (that's a separate agent prompt/eval pair, out of scope
+      here). No PDF export step; a browser's own "Print to PDF" on the HTML is the interim path.
+      Pure-function renderer (`tests/test_reports.py`, incl. an HTML-escaping/XSS test for
+      `narrative_md`), plus an integration test asserting the live endpoint serves it.
+**Exit:** live demo of full loop on 3 simulated streams; S1 smoke test green. **Both are now met**:
+S1 was closed in the backend pass above; the dashboard now gives the loop a real portfolio-demo
+surface (live incident feed, needs_review queue with a working review action, evidence playback,
+shift report) rather than just a passing script -- with the video-overlay/2D-canvas piece honestly
+deferred pending `frame.ticker`, and browser-visual QA honestly deferred pending a browser tool in
+a future session.
 
 ## M5 — Evaluation & tuning (1–2 weeks)
 - [ ] Benchmark matrix (2 models × 2 precisions × 1–3 streams on the spike-00 hardware; expand only

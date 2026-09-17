@@ -32,6 +32,11 @@ services:
       dockerfile: docker/Dockerfile.web
     environment:
       DATABASE_URL: postgresql://sitewatch:sitewatch@postgres:5432/sitewatch
+      # Same volume the agent service writes evidence into (below) -- read-only
+      # here since the API only serves clip.mp4/tracks.jsonl, never writes them.
+      WORKSPACE_ROOT: /workspace
+    volumes:
+      - agent_workspace:/workspace:ro
     ports:
       - "8000:8000"
     depends_on: [postgres, redis]
