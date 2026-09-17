@@ -31,6 +31,14 @@ TRACKLET_RETENTION_S = 5 * 60
 # docs/02 §6 failure-mode table: "Redis stream retention 1 h locally"
 TRIGGER_RETENTION_S = 60 * 60
 
+# Stream key naming (docs/06 §2). Defined here, not in pipelines.vision.pipeline
+# (the fast-path producer that also uses them), so consumers that only need the
+# key names -- agent/worker.py, evaluation/agent_eval.py -- don't have to import
+# that module and pull in its torch/ultralytics dependency chain just for two
+# string constants.
+STREAM_KEY_PREFIX = "tracklets"
+TRIGGER_STREAM_KEY = "trigger_events"
+
 
 def _minid_for_retention(retention_s: float, now: float | None = None) -> str:
     now = now if now is not None else time.time()

@@ -30,7 +30,13 @@ import time
 
 import redis
 
-from pipelines.broker.streams import TRACKLET_RETENTION_S, TRIGGER_RETENTION_S, trim_to_retention
+from pipelines.broker.streams import (
+    STREAM_KEY_PREFIX,
+    TRACKLET_RETENTION_S,
+    TRIGGER_RETENTION_S,
+    TRIGGER_STREAM_KEY,
+    trim_to_retention,
+)
 from pipelines.config.loader import load_rules, load_zones
 from pipelines.geometry.calibration_store import Calibration, load_calibration
 from pipelines.geometry.zones import ZoneEngine
@@ -41,8 +47,6 @@ from pipelines.vision.evidence import EvidenceCapture
 from pipelines.vision.rules import RuleEngine
 
 PUBLISH_HZ = 10.0
-STREAM_KEY_PREFIX = "tracklets"
-TRIGGER_STREAM_KEY = "trigger_events"
 # Time-based retention (XTRIM MINID, pipelines.broker.streams) replaced the M1
 # count-based MAXLEN trim; checked periodically rather than on every publish.
 TRIM_INTERVAL_S = 30.0

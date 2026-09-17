@@ -206,12 +206,64 @@ and the eval-set exit criterion are done and verified against the real `prime-ag
 mocks.
 
 ## M4 — Delivery plane (2 weeks)
-- [ ] FastAPI REST + WS (telemetry ticker, incident push); asyncpg queries
+- [x] FastAPI REST + WS (telemetry ticker, incident push); asyncpg queries -- done 2026-09-17.
+      `api/schema.sql` (`incidents`, `reviews`, `agent_runs`; a `NOTIFY`-emitting trigger on
+      `incidents` for the WS push); `api/repository.py` (asyncpg queries, `IncidentRecord` is the
+      wire format in both directions, no second driftable shape); `api/main.py` -- REST:
+      `GET/POST /api/v1/incidents[/{event_id}][/review]`, `GET /api/v1/{cameras,zones,rules}`
+      (served straight from `config/*.yaml`, not duplicated in Postgres), `GET /api/v1/kpis`; WS:
+      `/live/ws` pushes `incident.created`/`incident.updated` via Postgres `LISTEN`/`NOTIFY`
+      (the one mechanism that crosses the `agent/worker.py` <-> API process boundary without a
+      second broker). `frame.ticker` (live track positions, docs/06 §5) is **not** wired yet --
+      bridging Redis's per-camera tracklet streams to WS is real remaining work.
+      `agent/persistence.py`'s `PostgresPersister` closes M3's explicitly-deferred DB item:
+      `agent/worker.py` now writes every `IncidentRecord` (confirmed or needs_review) and its
+      `agent_run` stats for real. Tested against a real local Postgres (11 API tests, 9 repository
+      tests, 2 worker-persistence tests, all `@pytest.mark.integration`, skip cleanly without a DB
+      via a fast TCP reachability pre-check; `ci.yaml` now runs a Postgres service container so
+      they execute for real in CI, not just skip forever). Real bug caught before it shipped:
+      `PostgresPersister.persist()` originally called `asyncio.run()` directly, which raises
+      inside a caller that already has a running event loop (exactly what the integration test
+      needed to also `await` DB reads) -- fixed by running in a dedicated thread.
+- [x] `scripts/smoke_test.py` (docs/09 §6, S1) -- done 2026-09-17, for real: injects a synthetic
+      `TriggerEvent` into the real `trigger_events` Redis stream, drives it through
+      `AgentWorker` (agent stubbed via the same fake-CLI stand-in the test suite uses by default;
+      `--real-agent` drives the actual CLI), asserts the confirmed incident lands in Postgres,
+      and asserts the WS `incident.created` push is observed -- connecting the WS client *before*
+      the trigger fires, since Postgres `NOTIFY` isn't queued for late listeners (a real ordering
+      bug the first draft had, caught by actually running it, not by inspection).
+      **Verified passing end-to-end**, including inside the actual built `Dockerfile.agent` +
+      `Dockerfile.web` images (not just on the host): a container running `agent/worker.py`
+      persisted a confirmed incident to a real Postgres, and a second container running the real
+      FastAPI app served that exact row back over `GET /api/v1/incidents`.
+- [x] `docker/Dockerfile.agent` + `docker/Dockerfile.web` updated to actually run the M4 code --
+      done 2026-09-17. Two real gaps found and fixed along the way: (1) `agent/worker.py`
+      transitively imported `pipelines.vision.pipeline` (torch/ultralytics, ~5 GB) just for two
+      string constants (`TRIGGER_STREAM_KEY`/`STREAM_KEY_PREFIX`) -- moved them to
+      `pipelines/broker/streams.py`, confirmed via `sys.modules` after `import agent.worker` that
+      torch/ultralytics no longer load; `Dockerfile.agent` installs a small explicit package list
+      (pydantic/pyyaml/redis/asyncpg) rather than `uv sync`-ing the full lockfile, matching the
+      pattern `Dockerfile.vision`/`Dockerfile.web` already use. (2) `Dockerfile.agent` set
+      `WORKDIR /workspace` before its `CMD ["python3", "-m", "agent.worker", ...]` -- `-m` resolves
+      packages against the *current working directory*, so this broke with `ModuleNotFoundError`
+      at runtime; fixed by keeping `WORKDIR /app` (where `agent/`/`pipelines/`/`api/` actually
+      live) and passing `/workspace` only as the `--workspace-root` argument.
+      `Dockerfile.web`'s pip-install list was still the M0 stub set (missing `asyncpg`,
+      `websockets`) and would have failed to boot the real API -- fixed. `docker-compose.yml` gets
+      a real `agent` service (mounts the host's `~/.prime` harness state, override via
+      `PRIME_HARNESS_DIR`) and `api`'s `DATABASE_URL`.
 - [ ] React dashboard: video+boxes overlay, 2D site canvas (tracks, zones), incident feed,
-      **needs_review queue UI** (docs/05 §8)
-- [ ] Clip persistence on trigger + evidence viewer
+      **needs_review queue UI** (docs/05 §8) -- not started; needs visual/browser iteration a
+      terminal-only session can't fully verify, scoped as separate follow-up work from the backend
+      slice above
+- [ ] Clip persistence on trigger + evidence viewer -- `EvidenceCapture` already writes
+      `tracks.jsonl`/`clip.mp4` to disk per incident (M2); serving/viewing them through the API is
+      what's still open
 - [ ] Shift report rendering (md → styled HTML/PDF)
-**Exit:** live demo of full loop on 3 simulated streams; S1 smoke test green.
+**Exit:** live demo of full loop on 3 simulated streams; S1 smoke test green. **S1 (smoke test) is
+met** for the backend loop (broker -> worker -> Postgres -> WS, verified both on the host and
+inside the real built containers); the "live demo" half of this exit criterion still needs the
+dashboard to be a demo in the portfolio sense, not just a passing script.
 
 ## M5 — Evaluation & tuning (1–2 weeks)
 - [ ] Benchmark matrix (2 models × 2 precisions × 1–3 streams on the spike-00 hardware; expand only

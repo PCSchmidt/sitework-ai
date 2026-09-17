@@ -305,19 +305,7 @@ curl -s http://localhost:8000/healthz     # API stub liveness
 
 ## Engineering context
 
-The slow-path agent is a containerized deployment of **[Prime
-Agent](https://github.com/PrimeIntellect-ai/prime-agent)**, Prime Intellect's open-source
-agent built on their **[RLM](https://www.primeintellect.ai/blog/rlm) (Recursive Language
-Model)** idea: instead of stuffing everything into one model's context window, an RLM
-keeps its own reasoning lean and manages a persistent Python REPL plus recursive calls to
-sub-LLMs to do the heavy lifting — exactly the shape this project needed for an incident
-verifier that must *compute* an answer (execute code against the raw tracklet window)
-rather than *guess* one from a prompt. `agent/prime_adapter.py` is the only module in this
-repo allowed to invoke it, wrapped in an external timeout the feasibility spike showed was
-necessary regardless of the CLI's own budget flags — see
-[docs/prime-agent-feasibility.md](docs/prime-agent-feasibility.md) for the full
-verified-capability writeup and [docs/spikes/spike-01-prime-agent-headless.md](docs/spikes/spike-01-prime-agent-headless.md)
-for the honest results of actually running it headless.
+The slow-path agent is a containerized deployment of **[Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent)**, Prime Intellect's open-source agent built on their **[RLM](https://www.primeintellect.ai/blog/rlm) (Recursive Language Model)** idea: instead of stuffing everything into one model's context window, an RLM keeps its own reasoning lean and manages a persistent Python REPL plus recursive calls to sub-LLMs to do the heavy lifting — exactly the shape this project needed for an incident verifier that must *compute* an answer (execute code against the raw tracklet window) rather than *guess* one from a prompt. `agent/prime_adapter.py` is the only module in this repo allowed to invoke it, wrapped in an external timeout the feasibility spike showed was necessary regardless of the CLI's own budget flags — see [docs/prime-agent-feasibility.md](docs/prime-agent-feasibility.md) for the full verified-capability writeup and [docs/spikes/spike-01-prime-agent-headless.md](docs/spikes/spike-01-prime-agent-headless.md) for the honest results of actually running it headless.
 
 ## License
 

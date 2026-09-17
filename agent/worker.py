@@ -11,24 +11,35 @@ recomputation gate (`agent.band3`) -> pass: `IncidentRecord` with
 `IncidentRecord` with `state=needs_review` and a `rejection_reason` --
 raw evidence is always kept, never silently dropped (docs/05 §8).
 
-Postgres insert + WS push land with the dashboard (docs/12 M4); for now
-`run_forever` logs each `IncidentRecord` and callers of `AgentWorker`
-directly (e.g. tests, or a future thin CLI) get it back from `process_one`.
+Persistence (docs/12 M4): `AgentWorker` takes an optional `Persister`
+(`agent/persistence.py`) -- `PostgresPersister` writes the `IncidentRecord`
+(and its embedded `agent_run` stats, when the RPC prompt actually completed)
+to Postgres, which is what feeds the REST API and the `/live/ws`
+incident-push (via a Postgres `NOTIFY` trigger, `api/schema.sql`). Defaults
+to `NullPersister` so `process_one` keeps working exactly as before for
+callers (tests, or direct use) that don't want a database.
 """
 
 from __future__ import annotations
 
 import logging
 import shutil
+import time
 from pathlib import Path
 from string import Template
 
 import redis
-from pipelines.broker.streams import ConsumerGroupReader
-from pipelines.schemas import IncidentRecord, IncidentState, KinematicsVerdict, TriggerEvent
-from pipelines.vision.pipeline import TRIGGER_STREAM_KEY
+from pipelines.broker.streams import TRIGGER_STREAM_KEY, ConsumerGroupReader
+from pipelines.schemas import (
+    AgentRunStats,
+    IncidentRecord,
+    IncidentState,
+    KinematicsVerdict,
+    TriggerEvent,
+)
 
 from agent.band3 import check as band3_check
+from agent.persistence import NullPersister, Persister
 from agent.prime_adapter import PrimeAdapter, PrimeAgentError, PrimeAgentTimeout
 
 logger = logging.getLogger(__name__)
@@ -47,6 +58,26 @@ _TRAJECTORY_TEMPLATE = Template(
 _GENERIC_TEMPLATE = Template(
     (PROMPT_DIR / "generic_classification.md").read_text(encoding="utf-8")
 )
+
+
+def _to_agent_run_stats(stats: dict[str, object] | None, wall_ms: int) -> AgentRunStats | None:
+    """`PrimeAdapter.prompt()`'s raw `get_session_stats` response -> `AgentRunStats`
+    (docs/06 §3). `None` only if the RPC session never returned stats at all
+    (shouldn't happen on a successful `prompt()` return, but the field is
+    optional upstream too)."""
+    if stats is None:
+        return None
+    tokens = stats.get("tokens")
+    tokens_in = tokens.get("input", 0) if isinstance(tokens, dict) else 0
+    tokens_out = tokens.get("output", 0) if isinstance(tokens, dict) else 0
+    turns = stats.get("assistantMessages", 0)
+    return AgentRunStats(
+        model="prime-agent",  # PromptResult.stats doesn't name the model in use
+        tokens_in=int(tokens_in) if isinstance(tokens_in, int | float) else 0,
+        tokens_out=int(tokens_out) if isinstance(tokens_out, int | float) else 0,
+        turns=int(turns) if isinstance(turns, int | float) else 0,
+        wall_ms=wall_ms,
+    )
 
 
 def build_prompt(event: TriggerEvent) -> str:
@@ -71,6 +102,7 @@ class AgentWorker:
         evidence_root: Path,
         consumer_name: str,
         prompt_timeout_s: float | None = None,
+        persister: Persister | None = None,
     ) -> None:
         self.reader = ConsumerGroupReader(
             redis_client, TRIGGER_STREAM_KEY, GROUP_NAME, consumer_name
@@ -78,6 +110,7 @@ class AgentWorker:
         self.workspace_root = workspace_root
         self.evidence_root = evidence_root
         self.prompt_timeout_s = prompt_timeout_s
+        self.persister: Persister = persister if persister is not None else NullPersister()
 
     def run_forever(self) -> None:
         while True:
@@ -98,9 +131,18 @@ class AgentWorker:
             )
         except Exception:
             logger.exception("incident %s failed before producing any verdict", event.event_id)
+            self.persister.persist_crash(event.event_id)
             # Not acked: XAUTOCLAIM hands this to the next consumer after
             # STALE_CLAIM_MS. A worker crash mid-incident must not drop the
             # trigger silently.
+            return
+        try:
+            self.persister.persist(record)
+        except Exception:
+            logger.exception("incident %s: verdict computed but persistence failed", event.event_id)
+            # Not acked either -- a crashed/unreachable DB must not silently
+            # drop a trigger whose verdict was already computed; the next
+            # consumer reprocesses it (upsert_incident is idempotent).
             return
         self.reader.ack(entry_id)
 
@@ -121,32 +163,42 @@ class AgentWorker:
 
         prompt = build_prompt(event)
 
+        start = time.monotonic()
         with PrimeAdapter(cwd=incident_dir) as adapter:
             try:
                 if self.prompt_timeout_s is not None:
-                    adapter.prompt(prompt, timeout_s=self.prompt_timeout_s)
+                    prompt_result = adapter.prompt(prompt, timeout_s=self.prompt_timeout_s)
                 else:
-                    adapter.prompt(prompt)
+                    prompt_result = adapter.prompt(prompt)
             except PrimeAgentTimeout as exc:
                 return self._needs_review(event, str(exc))
             except PrimeAgentError as exc:
                 return self._needs_review(event, f"prime-agent process error: {exc}")
+        wall_ms = int((time.monotonic() - start) * 1000)
+        agent_run = _to_agent_run_stats(prompt_result.stats, wall_ms)
 
         result_path = incident_dir / "result.json"
         if not result_path.exists():
             return self._needs_review(
-                event, "no result.json written (agent/prompts/root_policy.md §3 violation)"
+                event,
+                "no result.json written (agent/prompts/root_policy.md §3 violation)",
+                agent_run=agent_run,
             )
 
         try:
             verdict = KinematicsVerdict.model_validate_json(result_path.read_text(encoding="utf-8"))
         except Exception as exc:
-            return self._needs_review(event, f"result.json failed schema validation: {exc}")
+            return self._needs_review(
+                event, f"result.json failed schema validation: {exc}", agent_run=agent_run
+            )
 
         gate = band3_check(event, verdict, tracks_dst)
         if not gate.passed:
             return self._needs_review(
-                event, "Band-3 recomputation mismatch: " + "; ".join(gate.reasons), verdict=verdict
+                event,
+                "Band-3 recomputation mismatch: " + "; ".join(gate.reasons),
+                verdict=verdict,
+                agent_run=agent_run,
             )
 
         return IncidentRecord(
@@ -159,10 +211,15 @@ class AgentWorker:
             verified_kinematics=verdict,
             rule_citations=[event.rule_id],
             evidence_refs=[event.track_window_ref] + ([event.clip_ref] if event.clip_ref else []),
+            agent_run=agent_run,
         )
 
     def _needs_review(
-        self, event: TriggerEvent, reason: str, verdict: KinematicsVerdict | None = None
+        self,
+        event: TriggerEvent,
+        reason: str,
+        verdict: KinematicsVerdict | None = None,
+        agent_run: AgentRunStats | None = None,
     ) -> IncidentRecord:
         # docs/05 §8: never silently dropped -- persisted with state,
         # rejection_reason, and the evidence refs for a human reviewer.
@@ -178,6 +235,7 @@ class AgentWorker:
             rejection_reason=reason,
             rule_citations=[event.rule_id],
             evidence_refs=[event.track_window_ref] + ([event.clip_ref] if event.clip_ref else []),
+            agent_run=agent_run,
         )
 
 
@@ -191,7 +249,18 @@ def main() -> None:
     ap.add_argument("--workspace-root", default="/workspace")
     ap.add_argument("--evidence-root", default="incidents")
     ap.add_argument("--consumer-name", default=socket.gethostname())
+    ap.add_argument(
+        "--postgres-dsn",
+        default=None,
+        help="if omitted, verdicts are computed but not persisted (NullPersister)",
+    )
     args = ap.parse_args()
+
+    persister: Persister | None = None
+    if args.postgres_dsn:
+        from agent.persistence import PostgresPersister
+
+        persister = PostgresPersister(dsn=args.postgres_dsn)
 
     client = redis.Redis.from_url(args.redis_url)
     worker = AgentWorker(
@@ -199,6 +268,7 @@ def main() -> None:
         workspace_root=Path(args.workspace_root),
         evidence_root=Path(args.evidence_root),
         consumer_name=args.consumer_name,
+        persister=persister,
     )
     worker.run_forever()
 

@@ -1,4 +1,4 @@
-# FastAPI delivery plane (M0 stub; real REST+WS in M4).
+# FastAPI delivery plane (M4: real REST + WS, Postgres-backed).
 FROM python:3.11.11-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1
@@ -6,7 +6,10 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir uv
 COPY pyproject.toml ./
-RUN uv pip install --system --no-cache fastapi uvicorn pydantic pyyaml
+# asyncpg (api/db.py, api/repository.py) and websockets (the /live/ws endpoint's
+# ASGI server support, docs/06 §5) are both new, real M4 requirements -- this list
+# was still the M0-stub set before and would have failed to boot the real API.
+RUN uv pip install --system --no-cache fastapi uvicorn websockets pydantic pyyaml asyncpg
 
 COPY api ./api
 COPY pipelines ./pipelines

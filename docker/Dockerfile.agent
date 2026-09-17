@@ -31,7 +31,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends python3.11 python3.11-venv curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && bash -c "set -euo pipefail; curl -LsSf https://astral.sh/uv/install.sh | sh" \
-    && /root/.local/bin/uv --version
+    && /root/.local/bin/uv --version \
+    && cp /root/.local/bin/uv /usr/local/bin/uv  # root's $HOME isn't readable by `node` (USER below)
 
 # Vendored install (see note above) -- upgrade only with a fresh tarball + a green
 # contract test (docs/07 §3 contract-agent.yaml, created after this spike per docs/12).
@@ -40,9 +41,40 @@ RUN npm install -g /tmp/prime-agent.tgz && rm /tmp/prime-agent.tgz
 
 # node:22-bookworm-slim already ships a uid-1000 "node" user; reuse it rather than
 # colliding on --uid 1000 (spike-01 finding: useradd fails "UID 1000 is not unique").
-RUN mkdir -p /workspace && chown node:node /workspace
+RUN mkdir -p /workspace /app && chown node:node /workspace /app
 USER node
-WORKDIR /workspace
+WORKDIR /app
 
+# M4: this container now runs agent/worker.py (the actual queue dispatcher), not just
+# a bare `prime-agent` RPC probe -- the spike only needed prime-agent itself. `uv` was
+# already installed above (as root) for the prime-agent-runtime's own kernel-side shim;
+# copied to /usr/local/bin so the non-root `node` user can run it too.
+#
+# Deliberately NOT `uv sync` against the full pyproject.toml/uv.lock: that would pull
+# in torch/torchvision/ultralytics (the vision worker's CUDA stack, ~5 GB) even though
+# agent/worker.py never imports them -- confirmed by checking `sys.modules` after
+# `import agent.worker` (docs/12 M4 notes). Matches how Dockerfile.vision/Dockerfile.web
+# already hand-pick their own minimal package lists rather than syncing the shared
+# lockfile; this is that same pattern, not a new one.
+RUN uv venv .venv \
+    && uv pip install --python .venv/bin/python \
+       pydantic>=2.7 pyyaml>=6.0 redis>=5.0 asyncpg>=0.29
+
+COPY --chown=node:node agent/ ./agent/
+COPY --chown=node:node pipelines/ ./pipelines/
+COPY --chown=node:node config/ ./config/
+# agent/persistence.py reuses api/db.py + api/repository.py rather than a
+# second copy of the same SQL (docs/06 "single source of truth" applies to
+# the DB boundary too) -- api/main.py's own fastapi/websockets imports are
+# never triggered since nothing here imports the `api.main` submodule.
+COPY --chown=node:node api/ ./api/
+
+# Stays at /app (not /workspace): `python -m agent.worker` resolves the
+# `agent` package against the current working directory, so cwd has to be
+# where `agent/` actually lives -- confirmed by an earlier build that set
+# WORKDIR /workspace here and failed with ModuleNotFoundError at runtime.
+# /workspace is still where the worker writes incident payload files, via
+# the --workspace-root argument below, not via cwd.
 # /root/.prime equivalent (harness state) is mounted at /home/node/.prime in this image.
-CMD ["prime-agent", "--mode", "rpc"]
+CMD ["/app/.venv/bin/python3", "-m", "agent.worker", \
+     "--workspace-root", "/workspace", "--evidence-root", "/workspace/incidents"]

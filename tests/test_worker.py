@@ -91,6 +91,8 @@ def test_confirmed_when_agent_and_band3_agree(
     assert record.verified_kinematics is not None
     assert abs(record.verified_kinematics.verified_min_distance_m - 1.2) < 1e-6
     assert record.rejection_reason is None
+    assert record.agent_run is not None
+    assert record.agent_run.wall_ms >= 0
 
 
 def test_needs_review_when_band3_rejects_agent_output(
@@ -155,7 +157,7 @@ def test_run_forever_processes_and_acks_queued_entry(
 ) -> None:
     monkeypatch.setenv("FAKE_PRIME_AGENT_MODE", "run_incident")
     client = fakeredis.FakeRedis()
-    from pipelines.vision.pipeline import TRIGGER_STREAM_KEY
+    from pipelines.broker.streams import TRIGGER_STREAM_KEY
 
     client.xadd(TRIGGER_STREAM_KEY, _event_payload())
     _seed_evidence(tmp_path / "evidence", "evt_test")
@@ -172,3 +174,45 @@ def test_run_forever_processes_and_acks_queued_entry(
 
     assert client.xpending(TRIGGER_STREAM_KEY, "agent-worker")["pending"] == 0
     assert (tmp_path / "workspace" / "incidents" / "evt_test" / "result.json").exists()
+
+
+@pytest.mark.integration
+async def test_postgres_persister_writes_incident_and_agent_run(
+    tmp_path: Path, fake_prime_agent_on_path: Path, monkeypatch: pytest.MonkeyPatch, pg_pool
+) -> None:
+    """End-to-end: AgentWorker.process_one -> PostgresPersister -> real rows
+    in `incidents`/`agent_runs` (docs/12 M4 -- the item M3 explicitly deferred)."""
+    from agent.persistence import PostgresPersister
+    from api import repository
+
+    from conftest import TEST_DATABASE_URL
+
+    monkeypatch.setenv("FAKE_PRIME_AGENT_MODE", "run_incident")
+    client = fakeredis.FakeRedis()
+    from pipelines.broker.streams import TRIGGER_STREAM_KEY
+
+    client.xadd(TRIGGER_STREAM_KEY, _event_payload())
+    _seed_evidence(tmp_path / "evidence", "evt_test")
+
+    w = AgentWorker(
+        redis_client=client,
+        workspace_root=tmp_path / "workspace",
+        evidence_root=tmp_path / "evidence",
+        consumer_name="c1",
+        prompt_timeout_s=10,
+        persister=PostgresPersister(dsn=TEST_DATABASE_URL),
+    )
+    for entry in w.reader.read(count=10, block_ms=None):
+        w._handle(entry.entry_id, entry.payload)
+
+    stored = await repository.get_incident(pg_pool, "evt_test")
+    assert stored is not None
+    assert stored.state == IncidentState.CONFIRMED
+    assert stored.classification == "near_miss"
+
+    async with pg_pool.acquire() as conn:
+        run_row = await conn.fetchrow(
+            "SELECT * FROM agent_runs WHERE event_id = $1", "evt_test"
+        )
+    assert run_row is not None
+    assert run_row["status"] == "confirmed"

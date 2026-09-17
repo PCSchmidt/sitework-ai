@@ -30,9 +30,34 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.web
+    environment:
+      DATABASE_URL: postgresql://sitewatch:sitewatch@postgres:5432/sitewatch
     ports:
       - "8000:8000"
     depends_on: [postgres, redis]
+    networks: [internal]
+
+  # Slow-path agent worker (M3/M4): consumes trigger_events, drives prime-agent,
+  # persists confirmed/needs_review IncidentRecords. Harness state (prime-agent's
+  # own auth/session data) mounts from the host so the container reuses the same
+  # verified local install docker/vendor/README.md describes -- there's no
+  # containerized auth flow yet.
+  agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.agent
+    environment:
+      REDIS_URL: redis://redis:6379
+    command:
+      ["/app/.venv/bin/python3", "-m", "agent.worker",
+       "--redis-url", "redis://redis:6379",
+       "--postgres-dsn", "postgresql://sitewatch:sitewatch@postgres:5432/sitewatch",
+       "--workspace-root", "/workspace",
+       "--evidence-root", "/workspace/incidents"]
+    volumes:
+      - agent_workspace:/workspace
+      - ${PRIME_HARNESS_DIR:-~/.prime}:/home/node/.prime
+    depends_on: [redis, postgres]
     networks: [internal]
 
   # Fast-path workers, one per camera (docs/02 §7: one vision worker per stream,
@@ -111,3 +136,4 @@ networks:
 
 volumes:
   pgdata:
+  agent_workspace:
