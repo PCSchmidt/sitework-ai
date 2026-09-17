@@ -64,7 +64,21 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
       line) and `incidents/{event_id}/clip.mp4` (H.264 via PyAV) — the exact paths already stamped
       onto `track_window_ref`/`clip_ref`. 7 tests in `tests/test_evidence.py`. Known simplification:
       buffers/clip run at the ~10 Hz publish cadence, not full decode-rate, to bound memory.
-- [ ] Broker hardening: streams, retention, consumer groups, replay tooling
+- [x] Broker hardening: streams, retention, consumer groups, replay tooling — done 2026-09-17:
+      `pipelines/broker/streams.py` replaces the M1 count-based `XADD ... MAXLEN` trim with
+      time-based `XTRIM ... MINID` (`trim_to_retention`, checked every 30s in `pipeline.py`) —
+      `tracklets:{camera_id}` at 5 min retention, `trigger_events` at 1 h, matching docs/02 §2/§6
+      (which previously said `telemetry.{camera_id}`/`triggers` — corrected to the actual stream
+      keys). `ConsumerGroupReader` wraps XREADGROUP/XACK plus XAUTOCLAIM-based stale-pending
+      reclaim, ready for the M3 agent worker to consume `trigger_events` reliably.
+      `pipelines/broker/replay.py` dumps a stream's history (optionally since a timestamp) to
+      JSONL via XRANGE, independent of consumer-group offsets, for backfill/local dev. 15 tests
+      (`tests/test_broker_streams.py`, `tests/test_broker_replay.py`) using fakeredis, since no
+      test elsewhere in the repo depends on a live Redis.
+**M2 CLOSED 2026-09-17.** Remaining, not part of the M2 exit: real per-camera calibration data
+(a human/on-site task, not code — see PLAN.md and the calibration tool's own docs); the
+forklift-vs-worker proximity demo itself hasn't been run end-to-end against real footage since
+that depends on the calibration data.
 **Exit:** forklift-vs-worker proximity demo fires with metric distances on clip #1.
 
 ## M3 — Agent slow path (2–3 weeks)

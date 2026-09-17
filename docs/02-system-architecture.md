@@ -31,9 +31,9 @@ SiteWatch AI is a set of cooperating containers organized in four planes. Video 
 +--------------------------------------------------------------------------+
 | BROKER PLANE (infra/telemetry)                                            |
 |  Redis Streams (local) | Kafka / SQS / PubSub / ServiceBus (cloud maps)   |
-|  - stream: telemetry.{camera_id}                                          |
-|  - stream: triggers                                                       |
-|  - short retention ring buffer (5 min) for agent context windows          |
+|  - stream: tracklets:{camera_id}  (5 min retention, XTRIM MINID)          |
+|  - stream: trigger_events         (1 h retention, XTRIM MINID)            |
+|  - consumer groups (XREADGROUP/XACK) for reliable downstream consumers    |
 +----------------------+-------------------------------+-------------------+
                        | trigger events (rare)         | telemetry queries
                        v                               v

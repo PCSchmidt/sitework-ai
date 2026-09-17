@@ -14,7 +14,9 @@ Each TrackletFrame is also run through pipelines.vision.rules.RuleEngine;
 any resulting TriggerEvents are published to the `trigger_events` stream
 (the fast path -> agent queue handoff, docs/06 §2), and
 pipelines.vision.evidence.EvidenceCapture (when supplied) captures the
-tracks.jsonl/clip.mp4 window each TriggerEvent points at.
+tracks.jsonl/clip.mp4 window each TriggerEvent points at. Both Redis
+streams are periodically XTRIMmed to their documented retention windows
+via pipelines.broker.streams.trim_to_retention (docs/02 §2/§6).
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ import time
 
 import redis
 
+from pipelines.broker.streams import TRACKLET_RETENTION_S, TRIGGER_RETENTION_S, trim_to_retention
 from pipelines.config.loader import load_rules, load_zones
 from pipelines.geometry.calibration_store import Calibration, load_calibration
 from pipelines.geometry.zones import ZoneEngine
@@ -35,7 +38,9 @@ from pipelines.vision.rules import RuleEngine
 PUBLISH_HZ = 10.0
 STREAM_KEY_PREFIX = "tracklets"
 TRIGGER_STREAM_KEY = "trigger_events"
-STREAM_MAXLEN = 50_000  # ring retention; M2 hardens (consumer groups, replay)
+# Time-based retention (XTRIM MINID, pipelines.broker.streams) replaced the M1
+# count-based MAXLEN trim; checked periodically rather than on every publish.
+TRIM_INTERVAL_S = 30.0
 
 
 def _bottom_center(bbox_px: tuple[float, float, float, float]) -> tuple[float, float]:
@@ -56,6 +61,7 @@ def run_stream(
     r = redis.Redis.from_url(redis_url)
     publish_period = 1.0 / PUBLISH_HZ
     last_publish = 0.0
+    last_trim = 0.0
     # per-track previous ground point + timestamp, for finite-difference velocity
     prev_ground: dict[int, tuple[tuple[float, float], float]] = {}
 
@@ -139,12 +145,8 @@ def run_stream(
             calibration_quality=quality,
             tracks=tracks,  # type: ignore[arg-type]
         )
-        r.xadd(
-            f"{STREAM_KEY_PREFIX}:{camera_id}",
-            {"payload": msg.model_dump_json()},
-            maxlen=STREAM_MAXLEN,
-            approximate=True,
-        )
+        tracklet_stream_key = f"{STREAM_KEY_PREFIX}:{camera_id}"
+        r.xadd(tracklet_stream_key, {"payload": msg.model_dump_json()})
 
         if evidence_capture is not None:
             evidence_capture.on_frame(camera_id, frame.image, msg)
@@ -152,14 +154,14 @@ def run_stream(
         if rule_engine is not None:
             events = rule_engine.process(msg)
             for event in events:
-                r.xadd(
-                    TRIGGER_STREAM_KEY,
-                    {"payload": event.model_dump_json()},
-                    maxlen=STREAM_MAXLEN,
-                    approximate=True,
-                )
+                r.xadd(TRIGGER_STREAM_KEY, {"payload": event.model_dump_json()})
             if evidence_capture is not None and events:
                 evidence_capture.on_trigger(camera_id, frame.image, msg, events)
+
+        if now - last_trim >= TRIM_INTERVAL_S:
+            trim_to_retention(r, tracklet_stream_key, TRACKLET_RETENTION_S, now=now)
+            trim_to_retention(r, TRIGGER_STREAM_KEY, TRIGGER_RETENTION_S, now=now)
+            last_trim = now
 
 
 def main() -> None:
