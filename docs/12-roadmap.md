@@ -54,10 +54,21 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
       reference object, with one required scale anchor (assumed camera height). 10 tests
       (`tests/test_vanishing_point.py`) verify a full synthetic-camera round trip, including a
       real sign ambiguity in the recovered axes (a vanishing point encodes a direction, not a
-      signed ray) resolved by searching the 4 valid proper-rotation sign combinations. Not yet
-      run against the actual demo frame — still needs real line picks + an assumed camera height,
-      and any result is an engineering estimate, not a surveyed one, same as the point-correspondence
-      method above.
+      signed ray) resolved by searching the 4 valid proper-rotation sign combinations.
+      **Attempted against both `forklift_workers_interaction.mp4` and `worker_walking_aisle.mp4`
+      preview frames (2026-09-17) — both inconclusive, honestly.** Forklift frame: clean lateral
+      lines (wall/partition edges) were too close to parallel-in-image for a reliable vanishing
+      point; a depth-direction pairing that gave a plausible-looking focal length turned out to
+      combine two lines (a roof diagonal + a wall edge) with no verified reason to be parallel in
+      3D — discarded rather than reported, since presenting it would manufacture false confidence,
+      not measure anything. Aisle frame: strong lateral (shelf beam) and vertical (rack posts)
+      lines, but no identifiable depth-direction line anywhere in the frame (checked floor joints,
+      ceiling, adjacent rack bays — nothing usable). **Conclusion: neither stock clip has
+      calibration-grade geometry for either method; this is a property of the footage (not
+      composed for calibration), not a gap in the tooling, which is real and independently
+      verified.** Real per-camera calibration stays deferred — cheapest realistic path is a
+      short, deliberately-composed clip (any space, floor + two walls clearly visible), not
+      necessarily a real job site.
 - [x] Ground-plane projection + metric velocity; zone polygon engine (Shapely, precomputed) —
       `pipelines/geometry/zones.py` (ZoneEngine) + wired into `pipeline.py`: bottom-center bbox
       projected through H -> `ground_point_m`, finite-difference velocity/speed, zone containment
