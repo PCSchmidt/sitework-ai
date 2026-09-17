@@ -54,11 +54,16 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
       2026-09-16: `pipelines/vision/rules.py` (`RuleEngine`), 13 tests in `tests/test_rules.py`.
       `ppe_absence` and `wrong_way` are loaded but ignored (no PPE-classifying detector or
       lane-direction config yet); left for a later milestone.
-- [x] TriggerEvent emission — `pipeline.py` runs every published TrackletFrame through
-      `RuleEngine.process()` and XADDs results to the `trigger_events` Redis stream (the fast
-      path -> agent queue handoff). **Evidence window capture (tracks.jsonl + clip segment) is
-      still open** — `track_window_ref`/`clip_ref` are populated with the paths they'll live at,
-      but nothing writes those files yet.
+- [x] TriggerEvent emission + evidence window capture (tracks.jsonl + clip segment) — done
+      2026-09-17: `pipeline.py` runs every published TrackletFrame through `RuleEngine.process()`
+      and XADDs results to the `trigger_events` Redis stream (fast path -> agent queue handoff).
+      `pipelines/vision/evidence.py` (`EvidenceCapture`) keeps a rolling per-camera buffer of
+      recent TrackletFrames + images; on a TriggerEvent it opens a
+      `[trigger_ts - pre_window_s, trigger_ts + post_window_s]` window (defaults 5s/5s), and once
+      the post-window closes writes `incidents/{event_id}/tracks.jsonl` (one TrackletFrame per
+      line) and `incidents/{event_id}/clip.mp4` (H.264 via PyAV) — the exact paths already stamped
+      onto `track_window_ref`/`clip_ref`. 7 tests in `tests/test_evidence.py`. Known simplification:
+      buffers/clip run at the ~10 Hz publish cadence, not full decode-rate, to bound memory.
 - [ ] Broker hardening: streams, retention, consumer groups, replay tooling
 **Exit:** forklift-vs-worker proximity demo fires with metric distances on clip #1.
 

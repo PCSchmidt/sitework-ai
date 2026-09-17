@@ -9,6 +9,12 @@ finite difference against the track's previous ground point, and `zone_ids`
 comes from `pipelines.geometry.zones.ZoneEngine`. Without a valid
 calibration, ground_point_m/velocity_mps stay null and zone_ids empty, per
 schema (rules requiring metric distance degrade to zone-only, docs/04 §3).
+
+Each TrackletFrame is also run through pipelines.vision.rules.RuleEngine;
+any resulting TriggerEvents are published to the `trigger_events` stream
+(the fast path -> agent queue handoff, docs/06 §2), and
+pipelines.vision.evidence.EvidenceCapture (when supplied) captures the
+tracks.jsonl/clip.mp4 window each TriggerEvent points at.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from pipelines.geometry.zones import ZoneEngine
 from pipelines.ingestion.frame_source import FrameSource
 from pipelines.schemas import CalibrationQuality, TrackletFrame
 from pipelines.vision.detector import COCO_TO_SITEWATCH, Detector
+from pipelines.vision.evidence import EvidenceCapture
 from pipelines.vision.rules import RuleEngine
 
 PUBLISH_HZ = 10.0
@@ -44,6 +51,7 @@ def run_stream(
     calibration: Calibration | None = None,
     zone_engine: ZoneEngine | None = None,
     rule_engine: RuleEngine | None = None,
+    evidence_capture: EvidenceCapture | None = None,
 ) -> None:
     r = redis.Redis.from_url(redis_url)
     publish_period = 1.0 / PUBLISH_HZ
@@ -138,14 +146,20 @@ def run_stream(
             approximate=True,
         )
 
+        if evidence_capture is not None:
+            evidence_capture.on_frame(camera_id, frame.image, msg)
+
         if rule_engine is not None:
-            for event in rule_engine.process(msg):
+            events = rule_engine.process(msg)
+            for event in events:
                 r.xadd(
                     TRIGGER_STREAM_KEY,
                     {"payload": event.model_dump_json()},
                     maxlen=STREAM_MAXLEN,
                     approximate=True,
                 )
+            if evidence_capture is not None and events:
+                evidence_capture.on_trigger(camera_id, frame.image, msg, events)
 
 
 def main() -> None:
@@ -171,6 +185,7 @@ def main() -> None:
     calibration = load_calibration(args.camera_id)
     zone_engine = ZoneEngine(load_zones()) if calibration is not None else None
     rule_engine = RuleEngine(load_rules())
+    evidence_capture = EvidenceCapture()
     run_stream(
         args.camera_id,
         args.url,
@@ -179,6 +194,7 @@ def main() -> None:
         calibration=calibration,
         zone_engine=zone_engine,
         rule_engine=rule_engine,
+        evidence_capture=evidence_capture,
     )
 
 

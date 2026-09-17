@@ -103,10 +103,11 @@ class RuleEngine:
             severity_hint=DEFAULT_SEVERITY[rule.kind],
             metrics=metrics,
             involved_track_ids=track_ids,
-            # Evidence capture (tracks.jsonl + clip segment) is a separate,
-            # not-yet-built M2 item; this is the path it will write to.
+            # Paths pipelines.vision.evidence.EvidenceCapture writes to, once the
+            # asynchronous pre/post-trigger window closes (it isn't ready yet at
+            # emission time -- the post-trigger half hasn't happened).
             track_window_ref=f"incidents/{event_id}/tracks.jsonl",
-            clip_ref=None,
+            clip_ref=f"incidents/{event_id}/clip.mp4",
             cooldown_key=self._cooldown_key(frame.camera_id, rule, track_ids),
             calibration_quality=frame.calibration_quality,
         )
