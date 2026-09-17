@@ -117,6 +117,50 @@ def test_ground_homography_round_trip_recovers_world_points() -> None:
         assert recovered == pytest.approx(world_xy, abs=0.15)
 
 
+def test_ground_homography_tolerates_imprecise_real_world_line_picks() -> None:
+    """Regression test for a real bug found calibrating an actual phone photo.
+
+    Hand-picked pixel coordinates off a real image are never perfectly
+    precise -- the resulting vanishing-point triple is a few degrees off
+    true orthogonality, not exact. An earlier version of this function
+    rejected any triple whose determinant wasn't within 1e-3 of exactly
+    +-1, which silently raised "degenerate vanishing points" on real
+    (merely noisy, not actually degenerate) data. The fix projects onto
+    the nearest true rotation (SVD) instead of demanding exact
+    orthonormality; this perturbs each vanishing point by a few pixels,
+    the rough size of a real manual pick's error, and checks the method
+    still produces *a* homography rather than raising.
+    """
+    rng = np.random.default_rng(0)
+
+    def jitter(p: tuple[float, float], scale: float = 3.0) -> tuple[float, float]:
+        return (p[0] + rng.normal(0, scale), p[1] + rng.normal(0, scale))
+
+    jittered_lines_1 = [
+        (jitter(a), jitter(b)) for a, b in GROUND_LINES_1
+    ]
+    jittered_lines_2 = [
+        (jitter(a), jitter(b)) for a, b in GROUND_LINES_2
+    ]
+    jittered_vertical = [
+        (jitter(a), jitter(b)) for a, b in VERTICAL_LINES
+    ]
+
+    homography = calibrate_from_vanishing_points(
+        jittered_lines_1,
+        jittered_lines_2,
+        jittered_vertical,
+        PRINCIPAL_POINT,
+        CAMERA_HEIGHT_M,
+        GROUND_REFERENCE_PX,
+    )
+    # still roughly in the right ballpark despite the noise -- not exact,
+    # just no longer an outright failure to produce anything at all.
+    px = project((2.0, 10.0, 0.0))
+    recovered = homography.apply(px)
+    assert recovered == pytest.approx((2.0, 10.0), abs=2.0)
+
+
 def test_calibrate_from_vanishing_points_end_to_end() -> None:
     homography = calibrate_from_vanishing_points(
         GROUND_LINES_1,

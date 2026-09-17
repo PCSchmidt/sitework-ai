@@ -129,14 +129,21 @@ def ground_homography_from_vanishing_points(
     k = np.array([[f, 0, principal_point[0]], [0, f, principal_point[1]], [0, 0, 1]])
     gx, gy = ground_reference_px
 
-    # Exactly 4 of the 8 sign combinations give a proper rotation (det +1); which
-    # 4 depends on the raw triple's own handedness, so all 8 are tried and filtered.
+    # Exactly 4 of the 8 sign combinations give a proper (not mirrored) rotation;
+    # which 4 depends on the raw triple's own handedness, so all 8 are tried and
+    # filtered by determinant *sign*, not an exact +1 match -- real line picks are
+    # never perfectly orthogonal (a few degrees off is normal), so each kept triple
+    # is snapped to the nearest true rotation via SVD (standard orthogonal
+    # Procrustes) rather than rejected for not already being exactly orthonormal.
     candidates: list[tuple[float, Homography]] = []
     for s1, s2, s3 in itertools.product((1, -1), repeat=3):
-        r1, r2, r3 = s1 * r1_raw, s2 * r2_raw, s3 * r3_raw
-        rotation = np.column_stack([r1, r2, r3])
-        if not np.isclose(np.linalg.det(rotation), 1.0, atol=1e-3):
-            continue  # not a proper rotation for this vanishing-point triple; skip
+        r1_n, r2_n, r3_n = s1 * r1_raw, s2 * r2_raw, s3 * r3_raw
+        raw = np.column_stack([r1_n, r2_n, r3_n])
+        if np.linalg.det(raw) <= 0:
+            continue  # mirrored, not a physically valid camera orientation
+        u, _s, vt = np.linalg.svd(raw)
+        rotation = u @ vt
+        r1, r2, r3 = rotation[:, 0], rotation[:, 1], rotation[:, 2]
 
         t = -camera_height_m * r3
         h_world_to_image = k @ np.column_stack([r1, r2, t])
