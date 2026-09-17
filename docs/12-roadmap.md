@@ -40,8 +40,16 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
 **M1 CLOSED 2026-09-16** — see `docs/benchmarks.md` for the exit checklist.
 
 ## M2 — Spatial layer (2 weeks)
-- [ ] `geometry/homography.py` + `calibrate.py` manual calibration tool; quality metric (RMS)
-- [ ] Ground-plane projection + metric velocity; zone polygon engine (Shapely, precomputed)
+- [x] `geometry/homography.py` + `calibrate.py` manual calibration tool; quality metric (RMS) —
+      done 2026-09-16: DLT solve + RMS reprojection gate (tests: test_homography.py,
+      test_calibrate.py); CLI takes a point-correspondences JSON rather than interactive frame
+      clicks (scriptable/testable — clicking is just one way to produce that file). Actual per-site
+      `config/calibration/{camera_id}.json` files still need a human to pick real ground points
+      against camera footage + site measurements — not yet run against real demo footage.
+- [x] Ground-plane projection + metric velocity; zone polygon engine (Shapely, precomputed) —
+      `pipelines/geometry/zones.py` (ZoneEngine) + wired into `pipeline.py`: bottom-center bbox
+      projected through H -> `ground_point_m`, finite-difference velocity/speed, zone containment
+      populates `zone_ids`. Degrades to nulls/empty when no valid calibration exists (docs/04 §3).
 - [ ] Fast rule engine: zone_intrusion, proximity, dwell, speed (+ cooldown dedup)
 - [ ] TriggerEvent emission + evidence window capture (tracks.jsonl + clip segment)
 - [ ] Broker hardening: streams, retention, consumer groups, replay tooling

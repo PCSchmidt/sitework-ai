@@ -15,6 +15,7 @@ dependencies = [
     "av>=13.0",
     "numpy>=1.26",
     "ultralytics>=8.3",
+    "shapely>=2.0",
     "torch==2.11.0+cu128",
     "torchvision==0.26.0+cu128",
 ]
@@ -59,7 +60,7 @@ files = ["pipelines", "agent"]
 
 # Third-party libs without stubs (mypy follows but doesn't type-fail them)
 [[tool.mypy.overrides]]
-module = ["ultralytics", "av", "torch"]
+module = ["ultralytics", "av", "torch", "shapely.*"]
 ignore_missing_imports = true
 
 # Ultralytics' track()/predict() return Tensor|ndarray unions that strict mode
