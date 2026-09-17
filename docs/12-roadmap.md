@@ -30,12 +30,14 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
 - [x] Dataset selection + `data/manifests/` (versions, licenses, SHA256) for the actual demo clips —
       done 2026-09-16: Mendeley machinery, HF warehouse, MOT17 mirror, Pexels demo set
       (see `docs/04-data-and-models.md` §1 for the verified source table)
-- [ ] Ingestion: MediaMTX MP4 looping; RTSP frame source (PyAV/GStreamer), decode benchmarks
-- [ ] `detector.py`: YOLO11s via Ultralytics → ONNX → TensorRT FP16 wrappers (11n fallback via config)
-- [ ] `tracker.py`: ByteTrack + per-track Kalman (position/velocity, covariance)
-- [ ] `pipeline.py`: decode→detect→track→TrackletFrame publisher (Redis XADD @10 Hz)
-- [ ] `evaluation/benchmark_models.py` v1 (single stream)
+- [x] Ingestion: MediaMTX MP4 looping; RTSP frame source (PyAV/GStreamer), decode benchmarks
+- [x] `detector.py`: YOLO11s via Ultralytics → ONNX → TensorRT FP16 wrappers (11n fallback via config)
+- [x] `tracker.py`: ByteTrack + per-track Kalman (position/velocity, covariance)
+- [x] `pipeline.py`: decode→detect→track→TrackletFrame publisher (Redis XADD @10 Hz) — verified
+      end-to-end in Docker 2026-09-16 (commit d64c7fe): 3 GPU workers, valid TrackletFrames in Redis
+- [x] `evaluation/benchmark_models.py` v1 (single stream) — done 2026-09-16, see `docs/benchmarks.md`
 **Exit:** 1 stream ≥ 25 FPS on sample clip; tracklets in Redis; benchmark table v1; spike-00/02 recorded.
+**M1 CLOSED 2026-09-16** — see `docs/benchmarks.md` for the exit checklist.
 
 ## M2 — Spatial layer (2 weeks)
 - [ ] `geometry/homography.py` + `calibrate.py` manual calibration tool; quality metric (RMS)
