@@ -48,6 +48,15 @@
       "title": "Classification",
       "type": "string"
     },
+    "IncidentState": {
+      "description": "docs/05 \u00a78, docs/06 \u00a76 `incidents.state`.",
+      "enum": [
+        "confirmed",
+        "needs_review"
+      ],
+      "title": "IncidentState",
+      "type": "string"
+    },
     "KinematicsVerdict": {
       "additionalProperties": false,
       "description": "Agent output \u2014 verified kinematics (docs/06 \u00a73).",
@@ -120,7 +129,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Slow path \u2192 Band-3 gate \u2192 DB (docs/06 \u00a73).",
+  "description": "Slow path \u2192 Band-3 gate \u2192 DB (docs/06 \u00a73).\n\n`classification`/`verified_kinematics` are optional because a\n`state=needs_review` record (docs/05 \u00a78: schema-invalid agent output,\nBand-3 mismatch, or a timed-out/crashed run) may have no trustworthy\nverdict to attach -- the raw evidence is retained and a human decides,\nnever a silently-dropped or fabricated classification.",
   "properties": {
     "schema_version": {
       "default": "1.0",
@@ -142,11 +151,43 @@
     "severity": {
       "$ref": "#/$defs/Severity"
     },
+    "state": {
+      "$ref": "#/$defs/IncidentState",
+      "default": "confirmed"
+    },
     "classification": {
-      "$ref": "#/$defs/Classification"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Classification"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "verified_kinematics": {
-      "$ref": "#/$defs/KinematicsVerdict"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KinematicsVerdict"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rejection_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rejection Reason"
     },
     "narrative_md": {
       "default": "",
@@ -193,9 +234,7 @@
     "event_id",
     "camera_id",
     "trigger_ts",
-    "severity",
-    "classification",
-    "verified_kinematics"
+    "severity"
   ],
   "title": "IncidentRecord",
   "type": "object"

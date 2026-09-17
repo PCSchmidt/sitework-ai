@@ -99,7 +99,8 @@ zones(id PK, camera_id FK, polygon jsonb, kind, active bool);
 tracks(track_id, camera_id FK, cls, first_seen, last_seen, PK(track_id, camera_id));
 track_frames(event_id FK, frame_ts, payload jsonb, PK(event_id, frame_ts));  -- triggered windows
 incidents(id PK, event_id UNIQUE FK, camera_id FK, trigger_ts, severity, classification,
-          verified_metrics jsonb, narrative_md text, rule_citations text[], state, created_at);
+          verified_metrics jsonb, narrative_md text, rule_citations text[], state,
+          rejection_reason text, created_at);
 agent_runs(id PK, incident_id FK NULL, kind, model, tokens_in, tokens_out, turns,
            wall_ms, status, created_at);          -- observability of the cognitive plane
 reviews(incident_id FK, reviewer, decision, note, at);

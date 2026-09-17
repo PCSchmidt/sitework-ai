@@ -36,6 +36,13 @@ class Classification(StrEnum):
     FALSE_POSITIVE = "false_positive"
 
 
+class IncidentState(StrEnum):
+    """docs/05 §8, docs/06 §6 `incidents.state`."""
+
+    CONFIRMED = "confirmed"
+    NEEDS_REVIEW = "needs_review"
+
+
 class _Base(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -126,15 +133,24 @@ class AgentRunStats(_Base):
 
 
 class IncidentRecord(_Base):
-    """Slow path → Band-3 gate → DB (docs/06 §3)."""
+    """Slow path → Band-3 gate → DB (docs/06 §3).
+
+    `classification`/`verified_kinematics` are optional because a
+    `state=needs_review` record (docs/05 §8: schema-invalid agent output,
+    Band-3 mismatch, or a timed-out/crashed run) may have no trustworthy
+    verdict to attach -- the raw evidence is retained and a human decides,
+    never a silently-dropped or fabricated classification.
+    """
 
     schema_version: str = SCHEMA_VERSION
     event_id: str
     camera_id: str
     trigger_ts: float
     severity: Severity
-    classification: Classification
-    verified_kinematics: KinematicsVerdict
+    state: IncidentState = IncidentState.CONFIRMED
+    classification: Classification | None = None
+    verified_kinematics: KinematicsVerdict | None = None
+    rejection_reason: str | None = None
     narrative_md: str = ""
     rule_citations: list[str] = []
     recommended_actions: list[str] = []

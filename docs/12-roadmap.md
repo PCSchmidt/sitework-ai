@@ -144,10 +144,37 @@ that depends on the calibration data.
       verified working as part of the spike (see above); still owes a real private-registry fix
       before anyone but this machine can build it (`docker/vendor/README.md` has the interim
       vendoring steps and what the real fix looks like)
-- [ ] `prime_adapter.py` (RPC JSON-lines driver) + `worker.py` queue consumer
-- [ ] Harness sub-agent specs: trajectory-inspector, compliance-auditor (persisted in `agent/harness/`)
-- [ ] Band-3 gate: schema validation + recomputation cross-check per docs/06 §3 tolerances
-- [ ] Incident persistence + `agent_runs` observability + `agent/worker_fallback.py`
+- [x] `agent/prime_adapter.py` (RPC JSON-lines driver) + `agent/worker.py` queue consumer — done
+      2026-09-17. `PrimeAdapter.prompt()` enforces the external supervisory timeout spike-01
+      Finding 4 required, via a background reader thread + `queue.Queue.get(timeout=)` rather than
+      iterating `proc.stdout` directly — a plain iteration blocks indefinitely on a silent pipe,
+      exactly the failure mode one spike run hit (20+ min hang, no events at all). `worker.py`
+      pops `trigger_events` off a Redis consumer group (crash-safe reclaim via `claim_stale`),
+      writes the incident payload files, prompts the trajectory-inspector role (proximity triggers
+      get the pairwise-distance verification prompt spike-01 validated against the real CLI;
+      zone_intrusion/speed triggers get a simpler single-track sanity-check prompt — there's no
+      pairwise distance for those rule kinds), and gates the result through Band-3
+      (`agent/band3.py`) before producing an `IncidentRecord`. Tested against a scripted stand-in
+      `prime-agent` process (tests/_fake_prime_agent.py), not the real CLI — spike-01 already
+      covered the real CLI's behavior; these tests cover the adapter/worker's own plumbing
+      (timeout-and-kill, schema validation, Band-3 rejection, missing-evidence handling). Schema
+      gap found and fixed along the way: `IncidentRecord` had no way to represent docs/05 §8's
+      `state=needs_review` path (Postgres `incidents.state`/`rejection_reason` existed in docs/06
+      §6 but not in the Pydantic model) — added `IncidentState` enum and `state`/
+      `rejection_reason` fields, `classification`/`verified_kinematics` now `Optional`.
+- [x] Harness sub-agent prompts: trajectory-inspector, generic classification (persisted as
+      templates in `agent/prompts/`, filled per-incident by `worker.py`) — not yet registered as
+      *harness* sub-agent specs (`agent/harness/`, prime-agent's own sub-agent mechanism per docs/05
+      §2); current implementation drives one root session per incident with a role-specific prompt,
+      which was what spike-01 actually tested. Promoting to real harness sub-agent specs is a
+      follow-up, not blocking M3's exit criterion.
+- [x] Band-3 gate: schema validation + recomputation cross-check per docs/06 §3 tolerances — done
+      2026-09-17 (`agent/band3.py`), recomputes pairwise ground-distance from `tracks.jsonl` using
+      the same math `RuleEngine._eval_proximity` uses, checked against both the fast path's claimed
+      metrics and the agent's claimed verdict.
+- [ ] Incident persistence (Postgres insert) + `agent_runs` observability — `worker.py` currently
+      returns/logs `IncidentRecord`s; DB wiring lands with the dashboard work (M4). Not building
+      `agent/worker_fallback.py` — spike-01's Conditional GO didn't trigger the fallback path.
 - [ ] `contract-agent.yaml` CI created immediately after the spike (the spike's golden session is
       the fixture); guards future prime-agent version bumps
 **Exit:** end-to-end: anomaly → verified incident in Postgres; validation pass ≥ 90% on the seeded

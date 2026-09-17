@@ -1,12 +1,17 @@
 """Pydantic v2 schemas — the single source of truth for the fast/slow boundary (docs/06)."""
 
 from pipelines.schemas.models import (
+    DISTANCE_TOL_M,
+    RELATIVE_TOL,
     RMS_GATE_PX,
     SCHEMA_VERSION,
+    TIME_TOL_S,
+    VELOCITY_TOL_MPS,
     Band3Tolerance,
     CalibrationQuality,
     Classification,
     IncidentRecord,
+    IncidentState,
     KinematicsVerdict,
     Severity,
     Track,
@@ -17,12 +22,17 @@ from pipelines.schemas.models import (
 )
 
 __all__ = [
+    "DISTANCE_TOL_M",
+    "RELATIVE_TOL",
     "RMS_GATE_PX",
     "SCHEMA_VERSION",
+    "TIME_TOL_S",
+    "VELOCITY_TOL_MPS",
     "Band3Tolerance",
     "CalibrationQuality",
     "Classification",
     "IncidentRecord",
+    "IncidentState",
     "KinematicsVerdict",
     "Severity",
     "Track",
