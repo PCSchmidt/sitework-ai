@@ -17,15 +17,17 @@ import time
 
 import redis
 
-from pipelines.config.loader import load_zones
+from pipelines.config.loader import load_rules, load_zones
 from pipelines.geometry.calibration_store import Calibration, load_calibration
 from pipelines.geometry.zones import ZoneEngine
 from pipelines.ingestion.frame_source import FrameSource
 from pipelines.schemas import CalibrationQuality, TrackletFrame
 from pipelines.vision.detector import COCO_TO_SITEWATCH, Detector
+from pipelines.vision.rules import RuleEngine
 
 PUBLISH_HZ = 10.0
 STREAM_KEY_PREFIX = "tracklets"
+TRIGGER_STREAM_KEY = "trigger_events"
 STREAM_MAXLEN = 50_000  # ring retention; M2 hardens (consumer groups, replay)
 
 
@@ -41,6 +43,7 @@ def run_stream(
     redis_url: str = "redis://localhost:6379",
     calibration: Calibration | None = None,
     zone_engine: ZoneEngine | None = None,
+    rule_engine: RuleEngine | None = None,
 ) -> None:
     r = redis.Redis.from_url(redis_url)
     publish_period = 1.0 / PUBLISH_HZ
@@ -135,6 +138,15 @@ def run_stream(
             approximate=True,
         )
 
+        if rule_engine is not None:
+            for event in rule_engine.process(msg):
+                r.xadd(
+                    TRIGGER_STREAM_KEY,
+                    {"payload": event.model_dump_json()},
+                    maxlen=STREAM_MAXLEN,
+                    approximate=True,
+                )
+
 
 def main() -> None:
     import argparse
@@ -158,6 +170,7 @@ def main() -> None:
     )
     calibration = load_calibration(args.camera_id)
     zone_engine = ZoneEngine(load_zones()) if calibration is not None else None
+    rule_engine = RuleEngine(load_rules())
     run_stream(
         args.camera_id,
         args.url,
@@ -165,6 +178,7 @@ def main() -> None:
         redis_url=args.redis,
         calibration=calibration,
         zone_engine=zone_engine,
+        rule_engine=rule_engine,
     )
 
 

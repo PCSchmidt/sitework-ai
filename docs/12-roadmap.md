@@ -50,8 +50,15 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
       `pipelines/geometry/zones.py` (ZoneEngine) + wired into `pipeline.py`: bottom-center bbox
       projected through H -> `ground_point_m`, finite-difference velocity/speed, zone containment
       populates `zone_ids`. Degrades to nulls/empty when no valid calibration exists (docs/04 §3).
-- [ ] Fast rule engine: zone_intrusion, proximity, dwell, speed (+ cooldown dedup)
-- [ ] TriggerEvent emission + evidence window capture (tracks.jsonl + clip segment)
+- [x] Fast rule engine: zone_intrusion, proximity, dwell, speed (+ cooldown dedup) — done
+      2026-09-16: `pipelines/vision/rules.py` (`RuleEngine`), 13 tests in `tests/test_rules.py`.
+      `ppe_absence` and `wrong_way` are loaded but ignored (no PPE-classifying detector or
+      lane-direction config yet); left for a later milestone.
+- [x] TriggerEvent emission — `pipeline.py` runs every published TrackletFrame through
+      `RuleEngine.process()` and XADDs results to the `trigger_events` Redis stream (the fast
+      path -> agent queue handoff). **Evidence window capture (tracks.jsonl + clip segment) is
+      still open** — `track_window_ref`/`clip_ref` are populated with the paths they'll live at,
+      but nothing writes those files yet.
 - [ ] Broker hardening: streams, retention, consumer groups, replay tooling
 **Exit:** forklift-vs-worker proximity demo fires with metric distances on clip #1.
 

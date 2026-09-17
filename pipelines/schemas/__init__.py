@@ -11,7 +11,9 @@ from pipelines.schemas.models import (
     Severity,
     Track,
     TrackletFrame,
+    TrackState,
     TriggerEvent,
+    TriggerMetrics,
 )
 
 __all__ = [
@@ -24,6 +26,8 @@ __all__ = [
     "KinematicsVerdict",
     "Severity",
     "Track",
+    "TrackState",
     "TrackletFrame",
     "TriggerEvent",
+    "TriggerMetrics",
 ]
