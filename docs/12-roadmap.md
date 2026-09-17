@@ -124,12 +124,26 @@ that depends on the calibration data.
 **Exit:** forklift-vs-worker proximity demo fires with metric distances on clip #1.
 
 ## M3 — Agent slow path (2–3 weeks)
-- [ ] **M3.0 Feasibility spike (2 days)** per docs/prime-agent-feasibility.md §5; record in
-      `docs/spikes/spike-01-prime-agent-headless.md`; explicit go/no-go: on fail, switch to
-      `agent/worker_fallback.py` (LiteLLM) and M3 continues unchanged (ADR-005)
+- [x] **M3.0 Feasibility spike (2 days)** per docs/prime-agent-feasibility.md §5; recorded in
+      `docs/spikes/spike-01-prime-agent-headless.md` — done 2026-09-17. **Verdict: Conditional
+      GO** (ADR-005 updated). 5/5 golden-incident runs (4 local + 1 in the real built container)
+      produced correct, schema-valid `result.json`, including unprompted Band-3-style discrepancy
+      flagging. Session persistence confirmed across a hard kill. Two real gaps found, not
+      fallback-triggers but binding on how `worker.py`/`Dockerfile.agent` get built: (1)
+      `--autonomous-max-turns` did NOT stop a runaway task at 3x its limit — `worker.py` must add
+      its own external subprocess timeout/kill, not trust the flag alone; (2) p50 triage ran
+      82–96s in 2/3 timed runs vs the 60s target — budget 90–120s for flash-tier models. Also
+      found and fixed for real: `Dockerfile.agent` as drafted didn't build (`prime-agent` isn't on
+      the public npm registry, UID 1000 collision, Node version mismatch vs the package's actual
+      `engines` requirement, a `curl | sh` silently swallowing a network failure) — see the spike
+      doc for all four fixes. Not switching to `agent/worker_fallback.py`; the core mechanism
+      works and was demonstrated repeatedly, including inside the actual container.
 - [ ] Seeded incident eval set (~10 incidents with hand labels, grows to 30+ at M5) — created here
       so the M3 exit metric (validation pass ≥ 90%) is measurable
-- [ ] `Dockerfile.agent` (pinned prime-agent, Node 20 + Python 3.11 + uv, non-root)
+- [x] `Dockerfile.agent` (pinned prime-agent, Node 22 + Python 3.11 + uv, non-root) — built and
+      verified working as part of the spike (see above); still owes a real private-registry fix
+      before anyone but this machine can build it (`docker/vendor/README.md` has the interim
+      vendoring steps and what the real fix looks like)
 - [ ] `prime_adapter.py` (RPC JSON-lines driver) + `worker.py` queue consumer
 - [ ] Harness sub-agent specs: trajectory-inspector, compliance-auditor (persisted in `agent/harness/`)
 - [ ] Band-3 gate: schema validation + recomputation cross-check per docs/06 §3 tolerances

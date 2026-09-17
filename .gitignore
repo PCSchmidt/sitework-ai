@@ -39,3 +39,7 @@ assets/clips/_preview/
 runs/
 data/raw/spike02-testset/
 data/raw/spike02-finetune/
+
+# Vendored prime-agent tarball (spike-01): private package, not on npm's public
+# registry -- see docker/vendor/README.md. Never commit the binary itself.
+docker/vendor/*.tgz

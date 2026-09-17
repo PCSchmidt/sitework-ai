@@ -1,22 +1,48 @@
-# Slow-path agent container (M3). Node 20 (prime-agent supervisor) + Python 3.11 (IPython
-# kernel) + uv, non-root, pinned prime-agent version. Defined now so the contract is
-# visible; built and exercised in M3 after the M3.0 spike.
-FROM node:20.18-bookworm-slim
+# Slow-path agent container (M3). Node 22 (prime-agent supervisor) + Python 3.11 (IPython
+# kernel) + uv, non-root, pinned prime-agent version.
+#
+# Built and verified working (spike-01, 2026-09-17): image builds, `prime-agent --version`
+# and a real stdin/stdout RPC round trip both work inside the container.
+#
+# IMPORTANT (spike-01 finding, elevates docs/prime-agent-feasibility.md risk F9 from "Low"):
+# prime-agent is NOT on the public npm registry -- its own package.json has
+# "private": true. `npm install -g prime-agent@x.y.z` (the original draft of this
+# file) fails everywhere except a machine that happens to have it globally installed
+# already. Until there's a real private registry (GitHub Packages / CI-published
+# artifact) with build-time auth, this Dockerfile installs from a vendored tarball
+# instead: `npm pack` the verified local install, drop the .tgz in docker/vendor/
+# (gitignored -- see docker/vendor/README.md), rebuild. This is a real gap to close
+# before this image is reproducible on any machine other than the one that built it.
+#
+# Also spike-01: docs/07 says "Node.js >= 20", but prime-agent's own package.json
+# declares "engines": {"node": ">=22.8.0"} -- a real doc/reality gap. node:20 installs
+# with an EBADENGINE warning (not a hard failure) but this image pins Node 22 to match
+# what the package actually requires rather than what the docs assumed.
+FROM node:22.11-bookworm-slim
 
 ENV PYTHONUNBUFFERED=1
-ARG PRIME_AGENT_VERSION=0.9.5
+ARG PRIME_AGENT_VERSION=0.9.3
 
+# spike-01 finding: `curl ... | sh` swallows curl's exit code through the pipe, so a
+# DNS/network blip made this step silently no-op (image "built" with no uv at all)
+# instead of failing the build. set -e in a bash -c wrapper plus an explicit
+# post-install check makes a broken install a hard build failure instead.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3.11 python3.11-venv curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -LsSf https://astral.sh/uv/install.sh | sh
+    && bash -c "set -euo pipefail; curl -LsSf https://astral.sh/uv/install.sh | sh" \
+    && /root/.local/bin/uv --version
 
-# Pinned prime-agent install (docs/07 §2; upgrade only with a green contract test).
-RUN npm install -g "prime-agent@${PRIME_AGENT_VERSION}"
+# Vendored install (see note above) -- upgrade only with a fresh tarball + a green
+# contract test (docs/07 §3 contract-agent.yaml, created after this spike per docs/12).
+COPY docker/vendor/prime-agent-${PRIME_AGENT_VERSION}.tgz /tmp/prime-agent.tgz
+RUN npm install -g /tmp/prime-agent.tgz && rm /tmp/prime-agent.tgz
 
-RUN useradd --uid 1000 --create-home agent
-USER agent
+# node:22-bookworm-slim already ships a uid-1000 "node" user; reuse it rather than
+# colliding on --uid 1000 (spike-01 finding: useradd fails "UID 1000 is not unique").
+RUN mkdir -p /workspace && chown node:node /workspace
+USER node
 WORKDIR /workspace
 
-# /root/.prime equivalent (harness state) is mounted at /home/agent/.prime in this image.
+# /root/.prime equivalent (harness state) is mounted at /home/node/.prime in this image.
 CMD ["prime-agent", "--mode", "rpc"]
