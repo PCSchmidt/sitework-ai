@@ -111,8 +111,10 @@ before any DB write. Files, not chat text, are the machine-readable fan-in contr
 parsing freeform agent prose.
 
 ### Docker image requirements (from the installed package's own structure)
-- Node.js ≥ 20 (TypeScript supervisor/daemon) **and** Python ≥ 3.11 with `uv` (the bundled
-  `prime-agent-runtime` pyproject requires `>=3.11`; kernel-side shim uses `mcp`, `tyro`).
+- Node.js ≥ 22.8.0 (TypeScript supervisor/daemon; `package.json`'s own `engines.node` --
+  corrected from an initial ≥20 guess by spike-01 Finding 2, which hit an `EBADENGINE` warning
+  against `node:20`) **and** Python ≥ 3.11 with `uv` (the bundled `prime-agent-runtime` pyproject
+  requires `>=3.11`; kernel-side shim uses `mcp`, `tyro`).
 - Persistent volume mount at `/root/.prime` (or configured state dir) for harness memory,
   refined sub-agent specs, and session trees — matches the EFS/Filestore/Azure-Files design in the
   cloud runbooks.

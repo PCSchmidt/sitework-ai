@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "near_miss",
+  "check_classification": true,
+  "notes": "clean near-miss; fast path claim matches recompute"
+}

@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "near_miss",
+  "check_classification": true,
+  "notes": "still closing at the last frame -- ttc_s should be non-null"
+}

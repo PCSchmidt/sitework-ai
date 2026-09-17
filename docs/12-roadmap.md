@@ -138,8 +138,17 @@ that depends on the calibration data.
       `engines` requirement, a `curl | sh` silently swallowing a network failure) — see the spike
       doc for all four fixes. Not switching to `agent/worker_fallback.py`; the core mechanism
       works and was demonstrated repeatedly, including inside the actual container.
-- [ ] Seeded incident eval set (~10 incidents with hand labels, grows to 30+ at M5) — created here
-      so the M3 exit metric (validation pass ≥ 90%) is measurable
+- [x] Seeded incident eval set (10 incidents with hand labels, grows to 30+ at M5) — done
+      2026-09-17. `evaluation/build_seed_incidents.py` generates 10 hand-designed fixtures (6
+      proximity, 2 zone_intrusion, 2 speed) covering near_miss/violation/normal_ops/false_positive
+      plus one deliberate evidence-inconsistency case designed to make Band-3 reject regardless of
+      the agent's answer; `evaluation/agent_eval.py` runs each through the real `AgentWorker`
+      pipeline against the real `prime-agent` 0.9.3 CLI (not a mock) and scores validation pass
+      rate + classification agreement. **Result: 10/10 validation pass, 9/9 classification
+      agreement (the 10th is the gate-rejection fixture, correctly rejected), p50 75.6s / max
+      96.0s** — full table and honest caveats (n=10 is small, synthetic tracklets not real
+      footage) in `docs/eval-m3-agent-slow-path.md`. **M3's exit metric (validation pass ≥ 90%) is
+      met.**
 - [x] `Dockerfile.agent` (pinned prime-agent, Node 22 + Python 3.11 + uv, non-root) — built and
       verified working as part of the spike (see above); still owes a real private-registry fix
       before anyone but this machine can build it (`docker/vendor/README.md` has the interim
@@ -175,10 +184,26 @@ that depends on the calibration data.
 - [ ] Incident persistence (Postgres insert) + `agent_runs` observability — `worker.py` currently
       returns/logs `IncidentRecord`s; DB wiring lands with the dashboard work (M4). Not building
       `agent/worker_fallback.py` — spike-01's Conditional GO didn't trigger the fallback path.
-- [ ] `contract-agent.yaml` CI created immediately after the spike (the spike's golden session is
-      the fixture); guards future prime-agent version bumps
+- [x] `contract-agent.yaml` CI — done 2026-09-17, scoped honestly to what's actually possible:
+      `prime-agent` still isn't installable in CI (private-registry gap, spike-01 Finding 1,
+      unresolved), so this doesn't drive the live CLI. Instead `scripts/record_golden_session.py`
+      captures a real RPC transcript (run manually, on a machine with the pinned version) into
+      `tests/fixtures/golden_prime_agent_session.jsonl` (888 real events, captured 2026-09-17
+      against 0.9.3); `tests/_fake_prime_agent.py`'s new `golden_replay` mode replays it
+      byte-for-byte; `tests/test_contract_agent.py` asserts `PrimeAdapter` parses the real output
+      shape correctly and the captured `result.json` still validates against `KinematicsVerdict`.
+      Guards this repo's adapter code against regressions, not prime-agent's own protocol drift —
+      re-run the recording script (and re-verify against the spike) whenever
+      `PINNED_PRIME_AGENT_VERSION` bumps.
 **Exit:** end-to-end: anomaly → verified incident in Postgres; validation pass ≥ 90% on the seeded
 set; spike metrics recorded.
+
+**M3 CLOSED 2026-09-17** except incident persistence (Postgres insert + `agent_runs`), which is
+explicitly deferred to M4's dashboard/DB wiring rather than built standalone here — `worker.py`
+already returns/logs full `IncidentRecord`s, so that's a storage-layer follow-up, not a gap in the
+agent pipeline itself. Both the dispatcher (`agent/prime_adapter.py` + `agent/worker.py` + Band-3)
+and the eval-set exit criterion are done and verified against the real `prime-agent` CLI, not
+mocks.
 
 ## M4 — Delivery plane (2 weeks)
 - [ ] FastAPI REST + WS (telemetry ticker, incident push); asyncpg queries

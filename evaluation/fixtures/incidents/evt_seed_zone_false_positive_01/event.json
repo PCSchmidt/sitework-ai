@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "event_id": "evt_seed_zone_false_positive_01",
+  "trigger_ts": 1003.5,
+  "camera_id": "yard_excavator_01",
+  "rule_id": "intrusion_excavator_swing",
+  "severity_hint": "high",
+  "metrics": {
+    "min_distance_m": null,
+    "duration_s": 3.5,
+    "closing_speed_mps": null
+  },
+  "involved_track_ids": [
+    88
+  ],
+  "track_window_ref": "incidents/evt_seed_zone_false_positive_01/tracks.jsonl",
+  "clip_ref": null,
+  "cooldown_key": "yard_excavator_01:zone_intrusion:evt_seed_zone_false_positive_01",
+  "calibration_quality": {
+    "rms_px": 1.1,
+    "valid": true
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "verified_min_distance_m": 1.4,
+  "closing_velocity_mps": 1.1,
+  "ttc_s": null,
+  "classification": "near_miss",
+  "recompute_inputs": {
+    "track_a": "42",
+    "track_b": "77",
+    "frames_used": "4"
+  }
+}

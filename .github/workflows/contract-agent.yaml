@@ -1,0 +1,41 @@
+name: contract-agent
+
+# Golden RPC session contract test (docs/07 §3, ADR-005 / feasibility doc F1):
+# guards PrimeAdapter's parsing against drift, replaying a real captured
+# prime-agent transcript rather than the live CLI. The real CLI isn't
+# installable here yet -- prime-agent is not on the public npm registry
+# (spike-01 Finding 1, docs/spikes/spike-01-prime-agent-headless.md) -- so
+# this job runs the same pytest suite's contract test against the committed
+# fixture (tests/fixtures/golden_prime_agent_session.jsonl), not a fresh
+# live run. Split into its own workflow (rather than folded into ci.yaml)
+# so it's easy to single out once the private-registry gap closes and this
+# can run against the real binary on a schedule.
+
+on:
+  pull_request:
+    paths:
+      - "agent/**"
+      - "tests/test_contract_agent.py"
+      - "tests/_fake_prime_agent.py"
+      - "tests/fixtures/golden_prime_agent_session.jsonl"
+  push:
+    branches: [main]
+    paths:
+      - "agent/**"
+      - "tests/test_contract_agent.py"
+      - "tests/_fake_prime_agent.py"
+      - "tests/fixtures/golden_prime_agent_session.jsonl"
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - run: uv sync --frozen || uv sync
+      - name: golden session must exist (regenerate via scripts/record_golden_session.py)
+        run: test -f tests/fixtures/golden_prime_agent_session.jsonl
+      - run: uv run pytest tests/test_contract_agent.py -v

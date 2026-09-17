@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "near_miss",
+  "check_classification": true,
+  "notes": "only 2 frames in the window -- exercises the minimal-data path"
+}

@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "violation",
+  "check_classification": true,
+  "notes": "speed_mps consistently well above the 2.2 m/s dock limit"
+}

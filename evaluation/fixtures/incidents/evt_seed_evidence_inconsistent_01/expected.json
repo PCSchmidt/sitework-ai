@@ -1,0 +1,6 @@
+{
+  "expected_state": "needs_review",
+  "expected_classification": null,
+  "check_classification": false,
+  "notes": "TriggerEvent claims min_distance_m=1.0 but tracks.jsonl's real minimum is 2.6m -- simulated evidence-capture bug; Band-3 must reject on the fast-path side of the cross-check even if the agent's own recompute is correct"
+}

@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "normal_ops",
+  "check_classification": true,
+  "notes": "inside proximity radius_m but never near_miss-close"
+}

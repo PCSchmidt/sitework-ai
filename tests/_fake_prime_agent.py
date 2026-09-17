@@ -81,6 +81,34 @@ def _recompute_result(cwd: str) -> dict:
     }
 
 
+def _replay_golden_session(fixture_path: str) -> None:
+    """Emits a previously-captured real prime-agent transcript verbatim (the
+    non-`response` events), then answers follow-up requests from the
+    fixture's own captured responses -- a byte-faithful replay, not a
+    re-synthesis, so it exercises PrimeAdapter's parsing against real output
+    shapes (see scripts/record_golden_session.py, tests/test_contract_agent.py)."""
+    with open(fixture_path, encoding="utf-8") as fh:
+        golden_events = [json.loads(line) for line in fh if line.strip()]
+
+    responses_by_command = {
+        evt["command"]: evt for evt in golden_events if evt.get("type") == "response"
+    }
+    for evt in golden_events:
+        if evt.get("type") != "response":
+            _emit(evt)
+
+    while True:
+        line = sys.stdin.readline()
+        if not line:
+            break
+        req = json.loads(line)
+        cmd = req.get("type")
+        if cmd in responses_by_command:
+            _emit(responses_by_command[cmd])
+        elif cmd == "abort":
+            break
+
+
 def main() -> None:
     argv = sys.argv[1:]
     if "--version" in argv:
@@ -92,6 +120,10 @@ def main() -> None:
 
     line = sys.stdin.readline()
     json.loads(line)  # the prompt request; contents unused by the fake
+
+    if mode == "golden_replay":
+        _replay_golden_session(os.environ["GOLDEN_SESSION_FIXTURE"])
+        return
 
     _emit({"type": "agent_start"})
 

@@ -1,0 +1,114 @@
+{
+  "summary": {
+    "n": 10,
+    "validation_pass_rate": 1.0,
+    "validation_pass": 10,
+    "classification_agreement_rate": 1.0,
+    "classification_agree": 9,
+    "classification_checked": 9,
+    "p50_wall_s": 75.59400000001187,
+    "max_wall_s": 96.0
+  },
+  "outcomes": [
+    {
+      "event_id": "evt_seed_evidence_inconsistent_01",
+      "expected_state": "needs_review",
+      "actual_state": "needs_review",
+      "expected_classification": null,
+      "actual_classification": "normal_ops",
+      "check_classification": false,
+      "rejection_reason": "Band-3 recomputation mismatch: TriggerEvent.metrics.min_distance_m=1.0 vs recomputed 2.600m (tol 0.15m / 5%)",
+      "wall_s": 96.0
+    },
+    {
+      "event_id": "evt_seed_minimal_window_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 75.59400000001187
+    },
+    {
+      "event_id": "evt_seed_near_miss_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 75.29700000002049
+    },
+    {
+      "event_id": "evt_seed_normal_ops_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "normal_ops",
+      "actual_classification": "normal_ops",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 87.92199999999139
+    },
+    {
+      "event_id": "evt_seed_speed_false_positive_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "false_positive",
+      "actual_classification": "false_positive",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 84.15599999998813
+    },
+    {
+      "event_id": "evt_seed_speed_violation_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 93.20300000000861
+    },
+    {
+      "event_id": "evt_seed_ttc_closing_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 74.85899999999674
+    },
+    {
+      "event_id": "evt_seed_violation_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 61.078000000008615
+    },
+    {
+      "event_id": "evt_seed_zone_false_positive_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "false_positive",
+      "actual_classification": "false_positive",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 41.469000000011874
+    },
+    {
+      "event_id": "evt_seed_zone_violation_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 57.921999999991385
+    }
+  ]
+}

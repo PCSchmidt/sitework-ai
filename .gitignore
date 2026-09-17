@@ -20,6 +20,8 @@ assets/clips/*.mp4
 data/raw/
 data/models/
 /workspace/incidents/
+/eval_workspace_tmp/
+/golden_session_tmp/
 
 # OS / editor
 .DS_Store
