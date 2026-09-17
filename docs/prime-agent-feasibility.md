@@ -23,7 +23,7 @@ capabilities that map directly onto SiteWatch's cognitive plane:
    sessions (trajectory inspector, compliance auditor) with A2A messaging and its own kernels —
    exactly the runtime MAS from the original concept (see `project_concepts_ideas.md`).
 3. **Continual harness state.** Sub-agent specs, memories, and refined behavioral policies persist
-   on disk (`/root/.prime/agent/`). Specialist roles are refined once and reused across every
+   on disk (`/home/node/.prime/agent/`). Specialist roles are refined once and reused across every
    incident and across container restarts when the directory is a persistent volume.
 4. **Model-agnostic routing.** OpenAI-compatible base URL (OpenRouter / Z.ai / local vLLM) means
    the whole agent pool can run on GLM-Flash-class models at fractions of a cent per incident.
@@ -97,7 +97,7 @@ allowlists and `--no-session` support least-privilege configuration per deployme
 |                                    |   trajectory-inspector    |
 |                                    |   compliance-auditor      |
 |                                    |   shift-synthesizer       |
-|  volumes: /root/.prime (persistent harness state)             |
+|  volumes: /home/node/.prime (persistent harness state)             |
 |           /workspace/incidents (event payloads, result JSON)  |
 +---------------------------------------------------------------+
         |
@@ -115,7 +115,7 @@ parsing freeform agent prose.
   corrected from an initial ≥20 guess by spike-01 Finding 2, which hit an `EBADENGINE` warning
   against `node:20`) **and** Python ≥ 3.11 with `uv` (the bundled `prime-agent-runtime` pyproject
   requires `>=3.11`; kernel-side shim uses `mcp`, `tyro`).
-- Persistent volume mount at `/root/.prime` (or configured state dir) for harness memory,
+- Persistent volume mount at `/home/node/.prime` (or configured state dir) for harness memory,
   refined sub-agent specs, and session trees — matches the EFS/Filestore/Azure-Files design in the
   cloud runbooks.
 - Non-root user, dropped capabilities, egress restricted to broker + LLM endpoints (docs/08-security.md).
@@ -130,9 +130,9 @@ parsing freeform agent prose.
 | F4 | **Latency** — a triage turn is seconds-to-tens-of-seconds | Accepted | By design: async slow path. Deterministic alerts (docs/03) never wait for the agent |
 | F5 | **Freeform output parsing** | Medium | result.json file contract + Pydantic validation + Band-3 recomputation cross-check (docs/03-hybrid-design.md §3); unparseable ⇒ `needs_review` state, never garbage in DB |
 | F6 | **Flash-class model tool discipline** (markdown blocks instead of executing, `input()` attempts) | Medium | Known caveat from the concept doc; strict harness policy (non-interactive, single-pass scripts), 2-strike escalation to a stronger model via `set_model` RPC |
-| F7 | **Cost runaway** on autonomous loops | Medium | `--autonomous-max-*` flags + per-incident token accounting (`get_session_stats`) + queue-depth budget alarm (docs/10-cost-model.md) |
+| F7 | **Cost runaway** on autonomous loops | Medium | **Revised by spike-01 Finding 4:** `--autonomous-max-*` flags alone did NOT stop a runaway task (observed 9 turns/130+s against `--autonomous-max-turns 3`). Real mitigation is `PrimeAdapter`'s own external wall-clock timeout + kill (`agent/prime_adapter.py`), with the CLI flags as a secondary, not sole, layer; plus per-incident token accounting (`get_session_stats`) + queue-depth budget alarm (docs/10-cost-model.md) |
 | F8 | **Windows/local dev divergence** | Low | Agent always runs in Linux containers, locally and in reference architecture; host OS irrelevant |
-| F9 | **License/distribution** — it's the author's own product | Low | Pin to a tagged image from the author's registry/CI; document the dependency explicitly in the README |
+| F9 | **License/distribution** — it's the author's own product | **Elevated Low → real by spike-01 Finding 1** | `prime-agent`'s `package.json` has `"private": true` — it is NOT on the public npm registry, so `Dockerfile.agent`'s original `npm install -g` fails on any machine but one with it already installed globally. Interim: vendored tarball install (`docker/vendor/`, gitignored, regeneration steps in `docker/vendor/README.md`). Real fix still owed: a private registry (GitHub Packages is the natural fit) with build-time auth, before this image is reproducible by anyone but the author's machine or CI with that auth configured |
 
 ## 5. De-risking Spike (M3.0 — first task of Milestone 3, ~2 days)
 

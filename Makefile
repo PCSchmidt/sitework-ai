@@ -2,7 +2,7 @@
 
 COMPOSE := docker compose -f docker/docker-compose.yml
 
-.PHONY: up down eval calib test iac report docs-check schema-export
+.PHONY: up down eval calib test iac report docs-check schema-export agent-eval
 
 up:        ## docker compose up --build (full stack, simulated feeds)
 	$(COMPOSE) up --build
@@ -21,6 +21,9 @@ schema-export: ## export Pydantic JSON Schemas to schemas/
 
 eval:      ## headless benchmark + eval harness (GPU)
 	uv run python evaluation/benchmark_models.py
+
+agent-eval: ## run the seeded incident set against the real prime-agent CLI (docs/09 §3)
+	uv run python -m evaluation.agent_eval
 
 calib:     ## launch manual homography calibration tool
 	uv run python -m pipelines.geometry.calibrate

@@ -15,7 +15,7 @@ worker), delivery plane (FastAPI + React), and persistence.
 | Anomaly event bus | FAST PATH trigger events consumed by SLOW PATH | Azure Service Bus queue (Standard tier) | Edge publisher sends JSON trigger events; Container Apps worker consumes |
 | Failed-event isolation | DLQ for poison / undecodable anomaly events | Service Bus dead-letter subqueue | Messages exceeding `maxDeliveryCount` move to `$DeadLetterQueue` |
 | Reasoning worker | SLOW PATH: kinematic verification, OSHA compliance correlation, shift reports | Azure Container Apps (scale on queue length via KEDA) | Dockerized Prime Agent supervisor + headless IPython REPL, RLM sub-agents |
-| Agent harness state | Persistent memory / prompt notes / skills for the agent runtime | Azure Files NFS share (Premium, `Premium_ZRS`) | NFS volume mounted read-write at `/root/.prime` in the worker container |
+| Agent harness state | Persistent memory / prompt notes / skills for the agent runtime | Azure Files NFS share (Premium, `Premium_ZRS`) | NFS volume mounted read-write at `/home/node/.prime` in the worker container |
 | Incident clips | Video evidence retained per incident | Blob Storage (Cool tier, lifecycle delete at 90d) | Edge uploader puts MP4 clips; FastAPI backend serves SAS URLs |
 | Incident / telemetry DB | Structured incidents, tracklets, shift reports | Azure Database for PostgreSQL Flexible Server | System of record for the delivery plane; queried by FastAPI |
 | FastAPI + React | Delivery plane REST API and operator dashboard | Container Apps + static web hosting | Serves incident data, SAS clip URLs, and compliance summaries |
@@ -78,7 +78,7 @@ resource "azurerm_servicebus_queue" "anomaly_events" {
   default_message_ttl  = "P7D"
 }
 
-# --- Azure Files NFS (Premium): persistent agent harness state (/root/.prime)
+# --- Azure Files NFS (Premium): persistent agent harness state (/home/node/.prime)
 resource "azurerm_storage_account" "prime_state" {
   name                     = "stsitewatchaiprime"
   resource_group_name      = azurerm_resource_group.rg.name
@@ -90,7 +90,7 @@ resource "azurerm_storage_account" "prime_state" {
 }
 
 resource "azurerm_storage_share" "prime_state" {
-  name                 = "prime-state"   # mounted at /root/.prime
+  name                 = "prime-state"   # mounted at /home/node/.prime
   storage_account_name = azurerm_storage_account.prime_state.name
   quota                = 100             # GiB
   protocol             = "NFS"
@@ -222,7 +222,7 @@ Expected agent incident response, in order:
    clearance rules; severity assigned.
 4. Incident record inserted into PostgreSQL; clip reference resolved from
    `incident-clips` blob container (SAS URL generated).
-5. Shift-report synthesis updated; harness memory note written to `/root/.prime` (Azure Files NFS).
+5. Shift-report synthesis updated; harness memory note written to `/home/node/.prime` (Azure Files NFS).
 6. Smoke event visible on the dashboard at `/incidents/smoke-001`.
 
 Pass criteria: `activeMessages == 0`, `deadLetterMessageCount == 0`, one incident row,

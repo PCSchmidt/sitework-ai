@@ -12,7 +12,7 @@ design documents production-grade controls.
 | Telemetry & triggers | vision → broker → agent | internal network only |
 | Incident records & clips | api → DB/object storage | evidence integrity (append-only) |
 | LLM provider credentials | secrets manager → agent container | never baked into images |
-| Agent harness state | /root/.prime volume | contains learned policies; treat as sensitive |
+| Agent harness state | /home/node/.prime volume | contains learned policies; treat as sensitive |
 
 ## 2. Threats (STRIDE-lite)
 

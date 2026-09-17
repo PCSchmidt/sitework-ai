@@ -45,6 +45,19 @@ worker.py pops TriggerEvent
   -> fail: state=needs_review, raw evidence retained, rejection logged
 ```
 
+**M3 implementation note (2026-09-17):** the above is the target design; what `agent/worker.py`
+actually ships for M3's exit criterion is a narrower slice of it, verified end-to-end against the
+real `prime-agent` CLI (`docs/eval-m3-agent-slow-path.md`) rather than left aspirational. Currently:
+one `PrimeAdapter` RPC session per incident, driven with a single role-specific prompt (the
+pairwise-distance verification prompt for proximity triggers, a simpler single-track sanity-check
+prompt for zone_intrusion/speed) rather than the root session spawning separate
+trajectory-inspector/compliance-auditor sub-agents; no `new_session`/shift-session warm-start or
+tier escalation yet; Band-3 gating (`agent/band3.py`) is real and enforced exactly as described
+above, including the `state=needs_review` + retained-evidence path. Postgres insert isn't wired yet
+-- `worker.py` returns/logs a complete `IncidentRecord` and that lands with M4's dashboard/DB work,
+not as a gap in the agent pipeline itself. Promoting the two roles to real harness sub-agent specs
+(§2) and adding shift-session warm starts are natural M4/M5 follow-ups, not blockers.
+
 ## 4. Model Routing (tiers)
 
 | Tier | Model class | Used for | Budget controls |

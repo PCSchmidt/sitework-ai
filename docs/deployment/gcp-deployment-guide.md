@@ -15,7 +15,7 @@ delivery plane (FastAPI + React), and persistence.
 | Anomaly event bus | FAST PATH trigger events consumed by SLOW PATH | Pub/Sub topic + push subscription | Edge publisher emits JSON trigger events; Cloud Run worker receives pushes |
 | Failed-event isolation | DLQ for poison / undecodable anomaly events | Pub/Sub dead-letter topic + retry policy | Events failing N delivery attempts route to `sitewatch-ai-anomaly-dlq` |
 | Reasoning worker | SLOW PATH: kinematic verification, OSHA compliance correlation, shift reports | Cloud Run (v2) service | Dockerized Prime Agent supervisor + headless IPython REPL, RLM sub-agents |
-| Agent harness state | Persistent memory / prompt notes / skills for the agent runtime | Filestore (NFS) instance | NFS volume mounted read-write at `/root/.prime` in the worker container |
+| Agent harness state | Persistent memory / prompt notes / skills for the agent runtime | Filestore (NFS) instance | NFS volume mounted read-write at `/home/node/.prime` in the worker container |
 | Incident clips | Video evidence retained per incident | Cloud Storage (standard, regional) | Edge uploader puts MP4 clips; FastAPI backend serves signed URLs |
 | Incident / telemetry DB | Structured incidents, tracklets, shift reports | Cloud SQL for PostgreSQL | System of record for the delivery plane; queried by FastAPI |
 | FastAPI + React | Delivery plane REST API and operator dashboard | Cloud Run (v2) service + static hosting | Serves incident data, signed clip URLs, and compliance summaries |
@@ -82,7 +82,7 @@ resource "google_pubsub_subscription" "anomaly_push" {
   expiration_policy { ttl = "" }   # never expire
 }
 
-# --- Filestore: persistent agent harness state (/root/.prime) ----------------
+# --- Filestore: persistent agent harness state (/home/node/.prime) ----------------
 resource "google_filestore_instance" "prime_state" {
   name     = "sitewatch-ai-prime-state"
   project  = local.project_id
@@ -223,7 +223,7 @@ Expected agent incident response, in order:
 3. OSHA-style compliance correlation: maps `forklift_lane_b` intrusion to powered-industrial-truck
    clearance rules; severity assigned.
 4. Incident record inserted into Cloud SQL; clip reference resolved from `gs://sitewatch-ai-incident-clips`.
-5. Shift-report synthesis updated; harness memory note written to `/root/.prime`.
+5. Shift-report synthesis updated; harness memory note written to `/home/node/.prime`.
 6. Smoke event visible on the dashboard at `/incidents/smoke-001`.
 
 Pass criteria: `numUndeliveredMessages == 0`, DLQ empty, one incident row, and

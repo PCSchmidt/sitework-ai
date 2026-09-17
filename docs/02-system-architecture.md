@@ -48,7 +48,7 @@ SiteWatch AI is a set of cooperating containers organized in four planes. Video 
 |    -> (escalation: frontier model)   |   |  PostgreSQL: incidents,   |
 |  Shift Synthesizer (scheduled)       |   |    tracks, shift KPIs     |
 |  Persistent harness state:           |   |  Incident clip writer     |
-|    /root/.prime on NFS-class volume  |   |   (S3/GCS/Blob or local)  |
+|    /home/node/.prime on NFS-class volume  |   |   (S3/GCS/Blob or local)  |
 +--------------------------------------+   |  React/Vite dashboard:    |
                                             |   - video + boxes overlay |
                                             |   - 2D site canvas        |

@@ -18,7 +18,11 @@ exists precisely so they don't have to).
 
 - Trigger gating: LLM touches only TriggerEvents (< 5 per 10-min clip), never frames.
 - Tier-1 workers (GLM-Flash class): ~$0.08–$0.15/M input tokens (or free endpoints).
-  Per-incident estimate: ~15–30 K tokens ⇒ **~$0.001–$0.005 per incident**.
+  Per-incident estimate: ~15–30 K tokens ⇒ **~$0.001–$0.005 per incident**. **Measured (spike-01 +
+  M3 eval, 2026-09-17):** real runs ran 43.5–56.2 K tokens/incident, above this estimate, but cost
+  stayed in the $0.0018–0.0019 band (still inside the $0.001–0.005 target) because GLM-Flash-class
+  cache-read pricing absorbed the token overshoot — see `docs/spikes/spike-01-prime-agent-headless.md`
+  Finding 6. Budget by the token estimate loosely; the cost estimate held up in practice.
 - Prompt caching: identical harness/system prompts across incidents ⇒ cache-hit pricing on
   recurrent tokens.
 - Heartbeats: watchdog at 60 s with tiny contexts on free tier ⇒ ~$0. **Deployment-specific

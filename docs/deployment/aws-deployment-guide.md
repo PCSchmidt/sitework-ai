@@ -12,7 +12,7 @@ with `plan` only. The canonical Terraform for this guide exists as a reviewed sp
 | --- | --- | --- |
 | Cognitive agent worker | **ECS on Fargate** | Containerized Prime Agent (Node supervisor + headless IPython REPL + sub-agent pool), event-driven |
 | Incident ingestion | **Amazon SQS + DLQ** | Buffers TriggerEvents from the edge vision filter; 300 s visibility timeout sized to max agent turn time; DLQ retains malformed payloads 14 days |
-| Persistent agent state | **Amazon EFS + Access Point** | Mounts at `/root/.prime` — harness memory, refined sub-agent specs, session trees survive restarts |
+| Persistent agent state | **Amazon EFS + Access Point** | Mounts at `/home/node/.prime` — harness memory, refined sub-agent specs, session trees survive restarts |
 | Evidence clips | **Amazon S3** | Trigger-time clip segments referenced by incidents |
 | Telemetry/relational DB | **Aurora Serverless (PostgreSQL)** | Incidents, KPIs, `agent_runs` audit |
 | Secrets & identity | **Secrets Manager + IAM** | LLM provider keys injected at runtime; separate execution vs task roles |

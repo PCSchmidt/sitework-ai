@@ -7,7 +7,7 @@ A hybrid deterministic/probabilistic computer vision system for warehouses and c
 | --- | --- |
 | Project | SiteWatch AI (`sitework-ai`) |
 | Type | Portfolio / reference-architecture project (no live cloud deployment required) |
-| Status | Planning complete — implementation not started |
+| Status | M0–M3 closed (see `docs/12-roadmap.md`); M4 (delivery plane) next |
 | Source of idea | `project_concepts_ideas.md` (Gemini conversation, summarized in [docs/01-vision-and-scope.md](docs/01-vision-and-scope.md)) |
 | Existing IaC artifact | `SiteWatch AI - AWS ECS Fargate & EFS Terraform Configuration.pdf` (full AWS Terraform spec) |
 
@@ -103,11 +103,11 @@ Effort estimates assume evenings/weekends pace (~10–15 h/week).
 
 | Milestone | Deliverable | Est. effort | Acceptance |
 | --- | --- | --- | --- |
-| **M0 — Scaffolding** | Repo layout, Docker Compose skeleton, CI (lint, tests, `terraform validate`), config schema (`cameras.yaml`, `zones.yaml`) | 1 week | CI green on empty pipeline; `make up` starts broker + API + UI |
-| **M1 — Perception core** | Ingestion (MP4 loop + MediaMTX), detector wrapper (**YOLO11s** per spike-00; forklift via truck/bus proxy per spike-02), ByteTrack tracker, JSON tracklet publisher, benchmark harness v1 | 2–3 weeks | S2 partially met (1 stream ≥ 25 FPS); eval numbers reproducible |
-| **M2 — Spatial layer** | Camera calibration + homography, ground-plane projection, zone polygon engine (Shapely), fast-path rule engine (proximity, dwell, speed), telemetry broker (PPE rules arrive at M5 with fine-tuned classes) | 2 weeks | Deterministic demo: forklift-vs-worker proximity event fires on sample clip with metric distances |
-| **M3 — Agent slow path** | **M3.0 feasibility spike first** (`docs/prime-agent-feasibility.md` §5 → ADR-005), then embedded Prime Agent via RPC adapter (`agent/prime_adapter.py`, pinned version, contract test); sub-agent specs (trajectory inspector, compliance auditor); Pydantic-verified outputs + recomputation gate; incident DB writes | 2–3 weeks | Spike pass criteria met; S3 met end-to-end: anomaly → agent incident report with verified kinematics; first-try validation ≥ 90% |
-| **M4 — Delivery plane** | FastAPI REST + WebSocket stream, React dashboard (live boxes + 2D site canvas + incident feed), clip persistence on trigger | 2 weeks | Live dashboard plays simulated incident from end to end |
+| **M0 — Scaffolding** ✅ CLOSED | Repo layout, Docker Compose skeleton, CI (lint, tests, `terraform validate`), config schema (`cameras.yaml`, `zones.yaml`) | 1 week | CI green on empty pipeline; `make up` starts broker + API + UI |
+| **M1 — Perception core** ✅ CLOSED | Ingestion (MP4 loop + MediaMTX), detector wrapper (**YOLO11s** per spike-00; forklift via truck/bus proxy per spike-02), ByteTrack tracker, JSON tracklet publisher, benchmark harness v1 | 2–3 weeks | S2 partially met (1 stream ≥ 25 FPS); eval numbers reproducible |
+| **M2 — Spatial layer** ✅ CLOSED | Camera calibration + homography, ground-plane projection, zone polygon engine (Shapely), fast-path rule engine (proximity, dwell, speed), telemetry broker (PPE rules arrive at M5 with fine-tuned classes) | 2 weeks | Deterministic demo: forklift-vs-worker proximity event fires on sample clip with metric distances |
+| **M3 — Agent slow path** ✅ CLOSED | **M3.0 feasibility spike first** (`docs/prime-agent-feasibility.md` §5 → ADR-005), then embedded Prime Agent via RPC adapter (`agent/prime_adapter.py`, pinned version, contract test); sub-agent specs (trajectory inspector, compliance auditor); Pydantic-verified outputs + recomputation gate; incident DB writes | 2–3 weeks | Spike pass criteria met; S3 met end-to-end: anomaly → agent incident report with verified kinematics; first-try validation ≥ 90% — **met: 10/10 on the seeded set, `docs/eval-m3-agent-slow-path.md`.** Incident DB writes deferred to M4 (storage-layer follow-up, not an agent-pipeline gap) |
+| **M4 — Delivery plane** (next) | FastAPI REST + WebSocket stream, React dashboard (live boxes + 2D site canvas + incident feed), clip persistence on trigger | 2 weeks | Live dashboard plays simulated incident from end to end |
 | **M5 — Evaluation & tuning** | Full benchmark matrix (models × precisions × streams), MOTA/IDF1 on MOT-derived clips, threshold calibration, `docs/benchmarks.md` | 1–2 weeks | S2, S6 fully met |
 | **M6 — Reference architecture** | Terraform for AWS (from existing PDF spec), GCP, Azure; `iac-check` CI; three cloud runbooks; cost model; ADRs finalized; simulated-live replay mode for public demo | 2 weeks | S5 met; public portfolio demo costs $0/mo |
 

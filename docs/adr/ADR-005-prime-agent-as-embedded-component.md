@@ -15,7 +15,7 @@ budget flags (`--autonomous-max-turns/-max-tokens/-timeout-ms`).
 Embed Prime Agent as the slow-path runtime:
 - One `prime-agent --mode rpc` process per agent container, driven by `agent/worker.py`.
 - All invocation behind `agent/prime_adapter.py`; pinned version; golden-session contract test in CI.
-- Harness state persisted on a volume at `/root/.prime`; results handed off as `result.json` files
+- Harness state persisted on a volume at `/home/node/.prime`; results handed off as `result.json` files
   validated by Pydantic (Band-3 gate) — files, not chat text, are the machine contract.
 - Contingency: M3.0 two-day spike must demonstrate validated output + budget enforcement + state
   persistence. Fallback: `agent/worker_fallback.py` (plain LiteLLM agent loop) behind the same

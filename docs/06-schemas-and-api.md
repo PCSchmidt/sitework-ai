@@ -57,7 +57,9 @@ Schemas are the hard contract at the fast/slow boundary (ADR-001). Single source
 
 - `KinematicsVerdict`: verified_min_distance_m, closing_velocity_mps, ttc_s (nullable),
   classification ∈ {normal_ops, near_miss, violation, false_positive}, `recompute_inputs` echo.
-- `IncidentRecord`: event_id, timestamps, verified kinematics, classification, severity ∈ enum,
+- `IncidentRecord`: event_id, timestamps, severity ∈ enum, `state` ∈ {confirmed, needs_review}
+  (docs/05 §8), `classification`/`verified_kinematics` (nullable -- absent for a rejected incident
+  rather than fabricated), `rejection_reason` (nullable, set only when `state=needs_review`),
   narrative_md, rule_citations[], recommended_actions[], evidence refs, agent_run stats.
 
 ### Band-3 gate (normative)
