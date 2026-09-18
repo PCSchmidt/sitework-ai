@@ -12,5 +12,6 @@
     [[1155, 1148], [1165, 1460]]
   ],
   "principal_point": [540.0, 960.0],
-  "ground_reference_px": [388.0, 1130.0]
+  "ground_reference_px": [388.0, 1130.0],
+  "ground_reference_expected_xy": [0.0, 1.0]
 }

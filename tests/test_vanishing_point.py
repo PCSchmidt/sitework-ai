@@ -14,6 +14,7 @@ from _synthetic_camera import (
     CAMERA_HEIGHT_M,
     GROUND_LINES_1,
     GROUND_LINES_2,
+    GROUND_REFERENCE_EXPECTED_XY,
     GROUND_REFERENCE_PX,
     PRINCIPAL_POINT,
     VERTICAL_LINES,
@@ -92,7 +93,13 @@ def test_ground_homography_round_trip_recovers_world_points() -> None:
     v2 = vanishing_point(GROUND_LINES_2)
     v3 = vanishing_point(VERTICAL_LINES)
     homography = ground_homography_from_vanishing_points(
-        v1, v2, v3, PRINCIPAL_POINT, CAMERA_HEIGHT_M, GROUND_REFERENCE_PX
+        v1,
+        v2,
+        v3,
+        PRINCIPAL_POINT,
+        CAMERA_HEIGHT_M,
+        GROUND_REFERENCE_PX,
+        GROUND_REFERENCE_EXPECTED_XY,
     )
 
     for world_xy in [(0.0, 5.0), (3.0, 8.0), (-2.0, 12.0), (1.5, 20.0)]:
@@ -101,33 +108,42 @@ def test_ground_homography_round_trip_recovers_world_points() -> None:
         assert recovered == pytest.approx(world_xy, abs=0.15)
 
 
-def test_ground_homography_sign_disambiguation_not_decided_by_distance_tie() -> None:
+def test_ground_homography_sign_disambiguation_not_decided_by_a_symmetric_tie() -> None:
     """Regression test for a real cross-platform CI failure (2026-09-18).
 
-    `GROUND_REFERENCE_PX` (the fixture's own reference pixel) sits at world
-    X=0 -- exactly on the camera's own depth axis -- which makes the correct
-    solution and its point-reflection through the origin have an *identical*
-    reconstructed distance from the origin (`sqrt(0**2+y**2) ==
-    sqrt(0**2+(-y)**2)`). The old "smallest distance" tiebreak alone couldn't
-    break that tie, so which sign combination won was decided by sub-ulp
-    floating-point noise -- green on this machine's BLAS, wrong sign on CI's,
-    with `-3.0` recovered where `3.0` was expected. Fixed by disambiguating
-    on physical validity first (the reference pixel must reconstruct to a
-    point in front of the camera, not behind it) before ever consulting
-    distance. Deliberately reuses the same X=0 fixture rather than picking a
-    non-degenerate reference point, since that's what actually exposed the
-    bug -- moving the reference point would hide the regression, not fix it.
+    The sign ambiguity here is really two independent ambiguities: which way
+    is "up" (resolved by requiring `ground_reference_px`'s ray to hit the
+    ground in front of the camera, not behind it -- exact, no heuristic
+    needed), and which way is "positive" in the ground plane's own X/Y axes
+    (a 180-degree in-plane rotation about the now-fixed vertical axis, which
+    leaves every camera-observable fact identical -- no single pixel's depth
+    can resolve it). The old code tried to resolve *both* with one heuristic,
+    "pick whichever reconstructs `ground_reference_px` closest to the
+    origin" -- mathematically blind to the second ambiguity
+    (`‖(x,y)‖ == ‖(-x,-y)‖` always), so it was silently decided by sub-ulp
+    floating-point noise on *every* calibration, not just an edge case:
+    green locally, `(-3.0)` recovered where `(3.0)` was expected on CI's
+    BLAS. Fixed by adding `ground_reference_expected_xy` -- an operator's
+    rough real-world guess -- and disambiguating against that instead of the
+    origin.
     """
     v1 = vanishing_point(GROUND_LINES_1)
     v2 = vanishing_point(GROUND_LINES_2)
     v3 = vanishing_point(VERTICAL_LINES)
     homography = ground_homography_from_vanishing_points(
-        v1, v2, v3, PRINCIPAL_POINT, CAMERA_HEIGHT_M, GROUND_REFERENCE_PX
+        v1,
+        v2,
+        v3,
+        PRINCIPAL_POINT,
+        CAMERA_HEIGHT_M,
+        GROUND_REFERENCE_PX,
+        GROUND_REFERENCE_EXPECTED_XY,
     )
     recovered = homography.apply(GROUND_REFERENCE_PX)
     # GROUND_REFERENCE_PX = project((0.0, 3.0, 0.0)) -- the mirrored (wrong)
-    # solution recovers (0.0, -3.0) instead.
-    assert recovered[1] > 0, f"recovered {recovered}, expected positive depth (mirror picked)"
+    # solution recovers (0.0, -3.0) instead, which is *farther* from
+    # GROUND_REFERENCE_EXPECTED_XY = (0.5, 2.0) than the correct one.
+    assert recovered == pytest.approx((0.0, 3.0), abs=0.15), f"recovered {recovered}, mirror picked"
 
 
 def test_ground_homography_tolerates_imprecise_real_world_line_picks() -> None:
@@ -149,15 +165,9 @@ def test_ground_homography_tolerates_imprecise_real_world_line_picks() -> None:
     def jitter(p: tuple[float, float], scale: float = 3.0) -> tuple[float, float]:
         return (p[0] + rng.normal(0, scale), p[1] + rng.normal(0, scale))
 
-    jittered_lines_1 = [
-        (jitter(a), jitter(b)) for a, b in GROUND_LINES_1
-    ]
-    jittered_lines_2 = [
-        (jitter(a), jitter(b)) for a, b in GROUND_LINES_2
-    ]
-    jittered_vertical = [
-        (jitter(a), jitter(b)) for a, b in VERTICAL_LINES
-    ]
+    jittered_lines_1 = [(jitter(a), jitter(b)) for a, b in GROUND_LINES_1]
+    jittered_lines_2 = [(jitter(a), jitter(b)) for a, b in GROUND_LINES_2]
+    jittered_vertical = [(jitter(a), jitter(b)) for a, b in VERTICAL_LINES]
 
     homography = calibrate_from_vanishing_points(
         jittered_lines_1,
@@ -166,6 +176,7 @@ def test_ground_homography_tolerates_imprecise_real_world_line_picks() -> None:
         PRINCIPAL_POINT,
         CAMERA_HEIGHT_M,
         GROUND_REFERENCE_PX,
+        GROUND_REFERENCE_EXPECTED_XY,
     )
     # still roughly in the right ballpark despite the noise -- not exact,
     # just no longer an outright failure to produce anything at all.
@@ -182,6 +193,7 @@ def test_calibrate_from_vanishing_points_end_to_end() -> None:
         PRINCIPAL_POINT,
         CAMERA_HEIGHT_M,
         GROUND_REFERENCE_PX,
+        GROUND_REFERENCE_EXPECTED_XY,
     )
     px = project((2.0, 10.0, 0.0))
     recovered = homography.apply(px)
@@ -194,10 +206,22 @@ def test_ground_homography_sensitive_to_wrong_camera_height() -> None:
     v2 = vanishing_point(GROUND_LINES_2)
     v3 = vanishing_point(VERTICAL_LINES)
     correct = ground_homography_from_vanishing_points(
-        v1, v2, v3, PRINCIPAL_POINT, CAMERA_HEIGHT_M, GROUND_REFERENCE_PX
+        v1,
+        v2,
+        v3,
+        PRINCIPAL_POINT,
+        CAMERA_HEIGHT_M,
+        GROUND_REFERENCE_PX,
+        GROUND_REFERENCE_EXPECTED_XY,
     )
     wrong = ground_homography_from_vanishing_points(
-        v1, v2, v3, PRINCIPAL_POINT, CAMERA_HEIGHT_M * 2, GROUND_REFERENCE_PX
+        v1,
+        v2,
+        v3,
+        PRINCIPAL_POINT,
+        CAMERA_HEIGHT_M * 2,
+        GROUND_REFERENCE_PX,
+        GROUND_REFERENCE_EXPECTED_XY,
     )
     px = project((2.0, 10.0, 0.0))
     correct_pt = correct.apply(px)

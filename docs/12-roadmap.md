@@ -56,16 +56,28 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
       real sign ambiguity in the recovered axes (a vanishing point encodes a direction, not a
       signed ray) resolved by searching the 4 valid proper-rotation sign combinations.
       **Update 2026-09-18 (found via M6's replay-mode push breaking CI, not by inspection):**
-      that resolution was incomplete. The 4 valid candidates were picked by smallest
-      reconstructed distance alone, which is not sufficient -- a reference pixel that happens to
-      sit on the camera's own depth axis (world X=0, exactly the test fixture's own
-      `GROUND_REFERENCE_PX`) makes the correct solution and its point-reflection through the
-      origin have an *identical* distance, so the real tiebreak was sub-ulp floating-point noise:
-      green locally (Windows), wrong sign on GitHub Actions' Linux runner (`-3.0` recovered where
-      `3.0` was expected). Fixed in `pipelines/geometry/vanishing_point.py` by disambiguating on
-      physical validity first (the reference pixel must reconstruct in front of the camera, not
-      behind it) before ever consulting distance -- a real depth-sign check, not a coin flip.
-      Regression test added (`test_ground_homography_sign_disambiguation_not_decided_by_distance_tie`).
+      that resolution was incomplete -- in two stages, both caught by actually running CI, not by
+      inspection. First pass: the 4 valid candidates were picked by smallest reconstructed distance
+      from the origin alone, which is mathematically blind to a *global* point-reflection
+      (`‖(x,y)‖ == ‖(-x,-y)‖` for any x,y, always) -- so on every calibration, not just this
+      fixture, which sign combination won was decided by sub-ulp floating-point noise: green
+      locally (Windows), wrong sign on GitHub Actions' Linux runner. An initial fix added an
+      exact, non-heuristic "reference pixel must reconstruct in front of the camera" depth check --
+      genuinely correct, but only for *one* of the two independent sign ambiguities here (which way
+      is "up"); it still failed the exact same way in CI, because the *other* ambiguity (which way
+      is "positive" in the ground plane's own X/Y -- a 180-degree in-plane rotation about the now-
+      fixed vertical axis) leaves every camera-observable fact, including that depth check,
+      identical, so it still can't be resolved from `ground_reference_px` alone. Real fix:
+      `ground_homography_from_vanishing_points`/`calibrate_from_vanishing_points` now take a new
+      required `ground_reference_expected_xy` -- an operator's own *rough* real-world estimate of
+      where the reference pixel sits (same role as `camera_height_m`: an assumed anchor, not a
+      measurement) -- and disambiguate against that instead of the origin, which is mathematically
+      capable of breaking a reflection tie. Verified the fix is robust, not just "happens to pass
+      again": the two physically-valid candidates now separate by a real ~4.5x margin in
+      reconstruction error (1.12 vs 5.02), not a sub-ulp tie. `pipelines/geometry/calibrate.py`'s
+      `--lines` JSON schema, the real `config/calibration/dining_room_01.lines.json` fixture, and
+      all call sites updated for the new required field. Regression test:
+      `test_ground_homography_sign_disambiguation_not_decided_by_a_symmetric_tie`.
       **Attempted against both `forklift_workers_interaction.mp4` and `worker_walking_aisle.mp4`
       preview frames (2026-09-17) — both inconclusive, honestly.** Forklift frame: clean lateral
       lines (wall/partition edges) were too close to parallel-in-image for a reliable vanishing

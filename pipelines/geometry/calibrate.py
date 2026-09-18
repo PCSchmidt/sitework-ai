@@ -28,8 +28,15 @@ interactively (clicking/tracing is just one way to produce the same file):
       "ground_lines_2": [[[x1, y1], [x2, y2]], ...],
       "vertical_lines": [[[x1, y1], [x2, y2]], ...],
       "principal_point": [cx, cy],
-      "ground_reference_px": [x, y]
+      "ground_reference_px": [x, y],
+      "ground_reference_expected_xy": [x_m, y_m]
     }
+
+`ground_reference_expected_xy` is the operator's own *rough* real-world estimate of
+where `ground_reference_px` sits (e.g. "about 1m ahead, roughly centered") -- it only
+needs to be roughly in the right direction, not measured; it resolves an in-plane
+180-degree sign ambiguity that no amount of precision on the lines/vanishing points
+themselves can (`ground_homography_from_vanishing_points`'s docstring, point 2).
 
 Usage:
     uv run python -m pipelines.geometry.calibrate \
@@ -110,6 +117,7 @@ def load_lines(path: Path) -> dict[str, object]:
         "vertical_lines",
         "principal_point",
         "ground_reference_px",
+        "ground_reference_expected_xy",
     }
     missing = required - data.keys()
     if missing:
@@ -129,6 +137,7 @@ def calibrate_from_lines(
     principal_point: Point,
     camera_height_m: float,
     ground_reference_px: Point,
+    ground_reference_expected_xy: Point,
 ) -> dict[str, object]:
     homography = calibrate_from_vanishing_points(
         ground_lines_1,
@@ -137,6 +146,7 @@ def calibrate_from_lines(
         principal_point,
         camera_height_m,
         ground_reference_px,
+        ground_reference_expected_xy,
     )
     v1 = vanishing_point(ground_lines_1)
     v2 = vanishing_point(ground_lines_2)
@@ -191,6 +201,10 @@ def main() -> None:
             (float(data["principal_point"][0]), float(data["principal_point"][1])),  # type: ignore[index]
             args.camera_height,
             (float(data["ground_reference_px"][0]), float(data["ground_reference_px"][1])),  # type: ignore[index]
+            (
+                float(data["ground_reference_expected_xy"][0]),  # type: ignore[index]
+                float(data["ground_reference_expected_xy"][1]),  # type: ignore[index]
+            ),
         )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)

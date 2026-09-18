@@ -129,6 +129,7 @@ def ground_homography_from_vanishing_points(
     principal_point: Point,
     camera_height_m: float,
     ground_reference_px: Point,
+    ground_reference_expected_xy: Point,
 ) -> Homography:
     """Build a pixel->meters ground Homography from three vanishing points.
 
@@ -139,28 +140,40 @@ def ground_homography_from_vanishing_points(
 
     A vanishing point encodes a 3D *direction*, not a signed ray: a set of
     parallel lines has one vanishing point regardless of which way along
-    that direction is "positive." That leaves a real ambiguity in which
-    way each of the three recovered axes points -- not just the vertical
-    one, all three -- but only the sign combinations that keep
-    `[r1, r2, r3]` a proper rotation (determinant +1, no mirroring) are
-    physically valid camera orientations (exactly 4 of the 8 possible sign
-    triples, depending on the raw triple's own handedness). Each valid one is
-    resolved first by a physical validity check -- `ground_reference_px` is a
-    real pixel the camera actually observed, so the ray through it must
-    intersect the ground plane *in front of* the camera (positive depth along
-    that ray), which rules out exactly the mirror-image sign choices -- and
-    only then, among any survivors, by picking the smallest reconstructed
-    distance as a plausibility tiebreak.
+    that direction is "positive." That leaves a real ambiguity in which way
+    each of the three recovered axes points -- only the sign combinations
+    that keep `[r1, r2, r3]` a proper rotation (determinant +1, no
+    mirroring) are physically valid camera orientations (exactly 4 of the 8
+    possible sign triples). Two independent facts resolve it, not one:
 
-    The depth check matters, not just the distance one: a `ground_reference_px`
-    placed exactly on the camera's own depth axis (world X=0, e.g. straight
-    ahead) makes the correct solution and its point-reflection through the
-    origin have an *identical* reconstructed distance
-    (`sqrt(0**2+y**2) == sqrt(0**2+(-y)**2)`) -- distance alone can't break
-    that tie, and which one wins becomes a coin flip decided by sub-ulp
-    floating-point noise (caught for real: green locally, wrong sign in CI,
-    for exactly this reason -- `tests/_synthetic_camera.py`'s fixture has its
-    ground reference point at X=0).
+    1. **Which way is up** (the vertical axis's sign) is resolved by physical
+       validity: `ground_reference_px` is a real pixel the camera observed,
+       so the ray through it must intersect the ground plane *in front of*
+       the camera (positive depth along that ray), never behind it. This
+       depends only on the recovered vertical direction, so it's exact, not
+       a heuristic.
+    2. **Which way is "positive" in the ground plane's own X/Y** is a
+       *separate* ambiguity a single pixel's depth cannot resolve at all --
+       flipping both ground axes 180 degrees about the (now-fixed) vertical
+       axis keeps every camera-observable fact (the vanishing points, the
+       depth-positivity check) identical, because it relabels which
+       physical point on the ground counts as "positive X, positive Y"
+       without moving that point in 3D. An earlier version of this function
+       tried to resolve this with "pick whichever candidate reconstructs
+       `ground_reference_px` closest to the origin" -- that's mathematically
+       blind to it (`‖(x,y)‖ == ‖(-x,-y)‖` always, a point-reflection through
+       the origin never changes distance-from-origin), so it was silently
+       deciding this sign via sub-ulp floating-point noise on every
+       calibration, not just an edge case -- caught for real when a CI run
+       on a different platform's BLAS recovered `(-x, -y)` where local runs
+       recovered `(x, y)`. Fixed by requiring `ground_reference_expected_xy`
+       -- the operator's own *rough* estimate of that pixel's real-world
+       position (same role as `camera_height_m`: an assumed, not measured,
+       real-world anchor) -- and picking the candidate whose reconstruction
+       is closest to it. Being roughly right is enough; the two remaining
+       candidates after step 1 are exact mirror images of each other, so
+       any non-zero-ish guess in the correct rough direction discriminates
+       between them correctly.
     """
     f = estimate_focal_length(v_ground1, v_ground2, principal_point)
     r1_raw = _direction(v_ground1, principal_point, f)
@@ -171,6 +184,7 @@ def ground_homography_from_vanishing_points(
     k_inv = np.linalg.inv(k)
     gx, gy = ground_reference_px
     ray_cam = k_inv @ np.array([gx, gy, 1.0])  # unprojected pixel direction, camera frame
+    expected = np.array(ground_reference_expected_xy)
 
     # Exactly 4 of the 8 sign combinations give a proper (not mirrored) rotation;
     # which 4 depends on the raw triple's own handedness, so all 8 are tried and
@@ -199,28 +213,25 @@ def ground_homography_from_vanishing_points(
         if abs(w[2]) < 1e-9:
             continue
         world_pt = np.array([w[0] / w[2], w[1] / w[2]])
-        plausibility = float(
-            np.linalg.norm(world_pt)
-        )  # secondary tiebreak only -- see docstring, not sufficient alone
+        # Closeness to the operator's rough estimate -- see docstring point 2
+        # for why "closeness to the origin" can't do this job.
+        closeness = float(np.linalg.norm(world_pt - expected))
 
-        # Physical validity: the ray through `ground_reference_px` must hit the
-        # ground plane at positive depth (in front of the camera). Solving
-        # world_Z=0 for the intersection depth lambda along that ray gives
+        # Physical validity -- see docstring point 1. Solving world_Z=0 for
+        # the intersection depth lambda along the reference ray gives
         # lambda = -camera_height_m / (r3 . ray_cam) (r3.T = -camera_height_m
-        # since r3 is unit length and t = -camera_height_m * r3); reject the
-        # mirror-image sign choice this rules out, rather than letting a
-        # distance tie decide it (see docstring).
+        # since r3 is unit length and t = -camera_height_m * r3).
         in_front = bool(-camera_height_m / (r3 @ ray_cam) > 0)
-        candidates.append((in_front, plausibility, Homography(matrix=h_image_to_world)))
+        candidates.append((in_front, closeness, Homography(matrix=h_image_to_world)))
 
     if not candidates:
         raise ValueError(
             "could not construct a valid ground homography (degenerate vanishing points)"
         )
-    # Prefer in-front-of-camera candidates (sorts False < True, so negate);
-    # falls back to the full set if none pass, rather than raising, since a
-    # near-degenerate real-world pick could plausibly put every candidate's
-    # lambda right at the noise floor around zero.
+    # Prefer in-front-of-camera candidates; falls back to the full set if
+    # none pass, rather than raising, since a near-degenerate real-world
+    # pick could plausibly put every candidate's lambda right at the noise
+    # floor around zero.
     in_front_candidates = [c for c in candidates if c[0]]
     pool = in_front_candidates if in_front_candidates else candidates
     pool.sort(key=lambda c: c[1])
@@ -234,11 +245,18 @@ def calibrate_from_vanishing_points(
     principal_point: Point,
     camera_height_m: float,
     ground_reference_px: Point,
+    ground_reference_expected_xy: Point,
 ) -> Homography:
     """End-to-end: line picks -> vanishing points -> ground Homography."""
     v1 = vanishing_point(ground_lines_1)
     v2 = vanishing_point(ground_lines_2)
     v3 = vanishing_point(vertical_lines)
     return ground_homography_from_vanishing_points(
-        v1, v2, v3, principal_point, camera_height_m, ground_reference_px
+        v1,
+        v2,
+        v3,
+        principal_point,
+        camera_height_m,
+        ground_reference_px,
+        ground_reference_expected_xy,
     )

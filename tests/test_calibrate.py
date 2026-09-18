@@ -18,6 +18,7 @@ from _synthetic_camera import (
     CAMERA_HEIGHT_M,
     GROUND_LINES_1,
     GROUND_LINES_2,
+    GROUND_REFERENCE_EXPECTED_XY,
     GROUND_REFERENCE_PX,
     PRINCIPAL_POINT,
     VERTICAL_LINES,
@@ -141,6 +142,7 @@ def _lines_payload() -> dict[str, object]:
         "vertical_lines": [list(pt) for pt in VERTICAL_LINES],
         "principal_point": list(PRINCIPAL_POINT),
         "ground_reference_px": list(GROUND_REFERENCE_PX),
+        "ground_reference_expected_xy": list(GROUND_REFERENCE_EXPECTED_XY),
     }
 
 
@@ -173,6 +175,7 @@ def test_calibrate_from_lines_passes_gate_for_exact_synthetic_data() -> None:
         PRINCIPAL_POINT,
         CAMERA_HEIGHT_M,
         GROUND_REFERENCE_PX,
+        GROUND_REFERENCE_EXPECTED_XY,
     )
     assert record["method"] == "vanishing_point"
     assert record["valid"] is True
@@ -192,6 +195,7 @@ def test_calibrate_from_lines_fails_gate_for_a_bad_vertical_pick() -> None:
         PRINCIPAL_POINT,
         CAMERA_HEIGHT_M,
         GROUND_REFERENCE_PX,
+        GROUND_REFERENCE_EXPECTED_XY,
     )
     assert record["valid"] is False
     assert record["rms_px"] > RMS_GATE_PX

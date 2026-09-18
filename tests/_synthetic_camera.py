@@ -51,3 +51,8 @@ GROUND_LINES_1 = [(project((0.0, y, 0.0)), project((5.0, y, 0.0))) for y in (3.0
 GROUND_LINES_2 = [(project((x, 2.0, 0.0)), project((x, 20.0, 0.0))) for x in (-3.0, 0.0, 3.0)]
 VERTICAL_LINES = [(project((x, 6.0, 0.0)), project((x, 6.0, 2.5))) for x in (-2.0, 0.0, 2.0)]
 GROUND_REFERENCE_PX = project((0.0, 3.0, 0.0))  # a pixel known to be on the ground
+# Deliberately imprecise (true value is (0.0, 3.0)) but correctly-signed -- models an
+# operator's rough real-world guess, not a measurement (docs on
+# ground_homography_from_vanishing_points). Also deliberately off the X=0 axis so
+# tests exercising it aren't themselves symmetric under point-reflection.
+GROUND_REFERENCE_EXPECTED_XY = (0.5, 2.0)
