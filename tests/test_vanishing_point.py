@@ -101,6 +101,35 @@ def test_ground_homography_round_trip_recovers_world_points() -> None:
         assert recovered == pytest.approx(world_xy, abs=0.15)
 
 
+def test_ground_homography_sign_disambiguation_not_decided_by_distance_tie() -> None:
+    """Regression test for a real cross-platform CI failure (2026-09-18).
+
+    `GROUND_REFERENCE_PX` (the fixture's own reference pixel) sits at world
+    X=0 -- exactly on the camera's own depth axis -- which makes the correct
+    solution and its point-reflection through the origin have an *identical*
+    reconstructed distance from the origin (`sqrt(0**2+y**2) ==
+    sqrt(0**2+(-y)**2)`). The old "smallest distance" tiebreak alone couldn't
+    break that tie, so which sign combination won was decided by sub-ulp
+    floating-point noise -- green on this machine's BLAS, wrong sign on CI's,
+    with `-3.0` recovered where `3.0` was expected. Fixed by disambiguating
+    on physical validity first (the reference pixel must reconstruct to a
+    point in front of the camera, not behind it) before ever consulting
+    distance. Deliberately reuses the same X=0 fixture rather than picking a
+    non-degenerate reference point, since that's what actually exposed the
+    bug -- moving the reference point would hide the regression, not fix it.
+    """
+    v1 = vanishing_point(GROUND_LINES_1)
+    v2 = vanishing_point(GROUND_LINES_2)
+    v3 = vanishing_point(VERTICAL_LINES)
+    homography = ground_homography_from_vanishing_points(
+        v1, v2, v3, PRINCIPAL_POINT, CAMERA_HEIGHT_M, GROUND_REFERENCE_PX
+    )
+    recovered = homography.apply(GROUND_REFERENCE_PX)
+    # GROUND_REFERENCE_PX = project((0.0, 3.0, 0.0)) -- the mirrored (wrong)
+    # solution recovers (0.0, -3.0) instead.
+    assert recovered[1] > 0, f"recovered {recovered}, expected positive depth (mirror picked)"
+
+
 def test_ground_homography_tolerates_imprecise_real_world_line_picks() -> None:
     """Regression test for a real bug found calibrating an actual phone photo.
 

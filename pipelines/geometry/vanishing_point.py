@@ -144,10 +144,23 @@ def ground_homography_from_vanishing_points(
     one, all three -- but only the sign combinations that keep
     `[r1, r2, r3]` a proper rotation (determinant +1, no mirroring) are
     physically valid camera orientations (exactly 4 of the 8 possible sign
-    triples, depending on the raw triple's own handedness). Each valid one
-    is resolved by picking whichever gives the smallest, most plausible
-    reconstructed distance for `ground_reference_px` -- a pixel the caller
-    knows is on the ground, e.g. near the bottom of the frame.
+    triples, depending on the raw triple's own handedness). Each valid one is
+    resolved first by a physical validity check -- `ground_reference_px` is a
+    real pixel the camera actually observed, so the ray through it must
+    intersect the ground plane *in front of* the camera (positive depth along
+    that ray), which rules out exactly the mirror-image sign choices -- and
+    only then, among any survivors, by picking the smallest reconstructed
+    distance as a plausibility tiebreak.
+
+    The depth check matters, not just the distance one: a `ground_reference_px`
+    placed exactly on the camera's own depth axis (world X=0, e.g. straight
+    ahead) makes the correct solution and its point-reflection through the
+    origin have an *identical* reconstructed distance
+    (`sqrt(0**2+y**2) == sqrt(0**2+(-y)**2)`) -- distance alone can't break
+    that tie, and which one wins becomes a coin flip decided by sub-ulp
+    floating-point noise (caught for real: green locally, wrong sign in CI,
+    for exactly this reason -- `tests/_synthetic_camera.py`'s fixture has its
+    ground reference point at X=0).
     """
     f = estimate_focal_length(v_ground1, v_ground2, principal_point)
     r1_raw = _direction(v_ground1, principal_point, f)
@@ -155,7 +168,9 @@ def ground_homography_from_vanishing_points(
     r3_raw = _direction(v_vertical, principal_point, f)
 
     k = np.array([[f, 0, principal_point[0]], [0, f, principal_point[1]], [0, 0, 1]])
+    k_inv = np.linalg.inv(k)
     gx, gy = ground_reference_px
+    ray_cam = k_inv @ np.array([gx, gy, 1.0])  # unprojected pixel direction, camera frame
 
     # Exactly 4 of the 8 sign combinations give a proper (not mirrored) rotation;
     # which 4 depends on the raw triple's own handedness, so all 8 are tried and
@@ -163,7 +178,7 @@ def ground_homography_from_vanishing_points(
     # never perfectly orthogonal (a few degrees off is normal), so each kept triple
     # is snapped to the nearest true rotation via SVD (standard orthogonal
     # Procrustes) rather than rejected for not already being exactly orthonormal.
-    candidates: list[tuple[float, Homography]] = []
+    candidates: list[tuple[bool, float, Homography]] = []
     for s1, s2, s3 in itertools.product((1, -1), repeat=3):
         r1_n, r2_n, r3_n = s1 * r1_raw, s2 * r2_raw, s3 * r3_raw
         raw = np.column_stack([r1_n, r2_n, r3_n])
@@ -186,15 +201,30 @@ def ground_homography_from_vanishing_points(
         world_pt = np.array([w[0] / w[2], w[1] / w[2]])
         plausibility = float(
             np.linalg.norm(world_pt)
-        )  # smaller = closer to camera base, more plausible
-        candidates.append((plausibility, Homography(matrix=h_image_to_world)))
+        )  # secondary tiebreak only -- see docstring, not sufficient alone
+
+        # Physical validity: the ray through `ground_reference_px` must hit the
+        # ground plane at positive depth (in front of the camera). Solving
+        # world_Z=0 for the intersection depth lambda along that ray gives
+        # lambda = -camera_height_m / (r3 . ray_cam) (r3.T = -camera_height_m
+        # since r3 is unit length and t = -camera_height_m * r3); reject the
+        # mirror-image sign choice this rules out, rather than letting a
+        # distance tie decide it (see docstring).
+        in_front = bool(-camera_height_m / (r3 @ ray_cam) > 0)
+        candidates.append((in_front, plausibility, Homography(matrix=h_image_to_world)))
 
     if not candidates:
         raise ValueError(
             "could not construct a valid ground homography (degenerate vanishing points)"
         )
-    candidates.sort(key=lambda c: c[0])
-    return candidates[0][1]
+    # Prefer in-front-of-camera candidates (sorts False < True, so negate);
+    # falls back to the full set if none pass, rather than raising, since a
+    # near-degenerate real-world pick could plausibly put every candidate's
+    # lambda right at the noise floor around zero.
+    in_front_candidates = [c for c in candidates if c[0]]
+    pool = in_front_candidates if in_front_candidates else candidates
+    pool.sort(key=lambda c: c[1])
+    return pool[0][2]
 
 
 def calibrate_from_vanishing_points(

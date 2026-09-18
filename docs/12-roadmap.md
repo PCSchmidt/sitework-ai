@@ -55,6 +55,17 @@ Sequencing principle: every milestone ends in something demoable. Effort assumes
       (`tests/test_vanishing_point.py`) verify a full synthetic-camera round trip, including a
       real sign ambiguity in the recovered axes (a vanishing point encodes a direction, not a
       signed ray) resolved by searching the 4 valid proper-rotation sign combinations.
+      **Update 2026-09-18 (found via M6's replay-mode push breaking CI, not by inspection):**
+      that resolution was incomplete. The 4 valid candidates were picked by smallest
+      reconstructed distance alone, which is not sufficient -- a reference pixel that happens to
+      sit on the camera's own depth axis (world X=0, exactly the test fixture's own
+      `GROUND_REFERENCE_PX`) makes the correct solution and its point-reflection through the
+      origin have an *identical* distance, so the real tiebreak was sub-ulp floating-point noise:
+      green locally (Windows), wrong sign on GitHub Actions' Linux runner (`-3.0` recovered where
+      `3.0` was expected). Fixed in `pipelines/geometry/vanishing_point.py` by disambiguating on
+      physical validity first (the reference pixel must reconstruct in front of the camera, not
+      behind it) before ever consulting distance -- a real depth-sign check, not a coin flip.
+      Regression test added (`test_ground_homography_sign_disambiguation_not_decided_by_distance_tie`).
       **Attempted against both `forklift_workers_interaction.mp4` and `worker_walking_aisle.mp4`
       preview frames (2026-09-17) — both inconclusive, honestly.** Forklift frame: clean lateral
       lines (wall/partition edges) were too close to parallel-in-image for a reliable vanishing
