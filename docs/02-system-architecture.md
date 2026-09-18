@@ -56,6 +56,16 @@ SiteWatch AI is a set of cooperating containers organized in four planes. Video 
                                             +---------------------------+
 ```
 
+**Implementation status vs. this design (as of M6, 2026-09-19):** everything above is built and
+verified except two pieces, both deliberately deferred rather than silently dropped. **Shift
+Synthesizer** (a scheduled sub-agent doing cross-incident KPI synthesis) was never built; M4
+shipped `api/reports.py` instead -- a pure-function HTML renderer that stitches together each
+incident's own already-agent-written `narrative_md`, not a new scheduled agent invocation (see
+docs/05 §1's note). **Video + boxes overlay / 2D site canvas** need `frame.ticker` (live track
+positions pushed over WS), which stays unwired -- the dashboard's live incident feed, needs_review
+queue, and evidence viewer (clip playback + tracks.jsonl) are real and verified, but there is no
+live video/canvas view yet.
+
 ## 2. Component Responsibilities
 
 | Component | Container | Key tech | owns |

@@ -38,10 +38,14 @@ cameras in `config/cameras.yaml` — forklift/pedestrian interaction (dock), wor
 | Grounding DINO / OWL-ViT | Zero-shot class discovery for rare machinery | Research spike only; too slow for fast path |
 
 Pipeline: COCO classes {person, forklift*, truck, bus→heavy-vehicle mapping} at M1; fine-tuned PPE
-classes at M5. `forklift` is not a native COCO class — **spike-02 resolved this (2026-09-16):
-the truck/bus → heavy_vehicle proxy ships for M1–M4** (YOLO-World scored 0% recall; a
-synthetic-only fine-tune failed sim2real on real footage — 0/304 frames). A true `forklift`
-class via real-frame fine-tune lands at M5. Full evidence: `docs/spikes/spike-02-forklift-class.md`.
+classes originally planned for M5. `forklift` is not a native COCO class — **spike-02 resolved
+this (2026-09-16): the truck/bus → heavy_vehicle proxy ships for M1+** (YOLO-World scored 0%
+recall; a synthetic-only fine-tune failed sim2real on real footage — 0/304 frames). **Neither the
+real-frame forklift fine-tune nor the PPE classifier landed at M5** (M5 closed 2026-09-18 with its
+actual scope -- benchmark matrix, eval-set expansion, threshold calibration -- see
+`docs/12-roadmap.md`'s M5 entry); both stay real, disclosed gaps, not yet re-scoped to a specific
+milestone, rather than a silently-dropped promise. The truck/bus proxy remains the shipped
+default. Full evidence: `docs/spikes/spike-02-forklift-class.md`.
 
 ### Tracking
 
@@ -52,14 +56,15 @@ class via real-frame fine-tune lands at M5. Full evidence: `docs/spikes/spike-02
 
 ### Quantization & Runtime
 
-| Precision | Expectation | Plan |
+| Precision | Expectation | Status |
 | --- | --- | --- |
-| FP32 (PyTorch) | Baseline accuracy | M1 only, for correctness reference |
-| **FP16 TensorRT** | ~2× speed, <0.5 mAP drop | Default from M2 |
-| **INT8 TensorRT** | ~3–4× speed, ~1–2 mAP drop (calibrate) | Default from M3; PTQ with 500 representative frames |
+| FP32 (PyTorch) | Baseline accuracy | Shipped since M1, correctness reference |
+| **FP16 TensorRT** | ~2× speed, <0.5 mAP drop | **Real, built at M5** (not M2 as originally planned -- `tensorrt` was never actually installed until then, a real doc/reality gap the M5 pass closed and measured: 34-57% single-stream speedup, 3-stream min-stream FPS 30.2 idle-recovered / 9.5-13.2 sustained-load, `docs/benchmarks.md`). Not yet wired as `pipeline.py`'s runtime default -- the M5 benchmark harness loads `.engine` files explicitly via `--model`, but `Detector`'s own default weights path is still the `.pt` file |
+| INT8 TensorRT | ~3–4× speed, ~1–2 mAP drop (calibrate) | **Not built.** Originally planned as an M3 default; never implemented at any milestone through M6 -- a real, disclosed gap, not a broken promise nobody noticed |
 
 Export path: Ultralytics `model.export(format='engine', half=True|int8=True)` → benchmark in
-`evaluation/benchmark_models.py`.
+`evaluation/benchmark_models.py`. FP16 export verified working this way (M5); INT8 (`int8=True`)
+has not been attempted.
 
 ## 3. Calibration & Homography
 

@@ -2,11 +2,15 @@
 
 **Status: active development, no live deployment.** This is a local-stack portfolio
 project — `make up` runs the full system (camera simulation, detection/tracking, rule
-engine, agent, API, dashboard scaffolding) on your machine via Docker Compose; there is
+engine, agent, API, live dashboard) on your machine via Docker Compose; there is
 no hosted demo URL and none is planned (ADR-004: documentation-only cloud deployment —
-three fully-specified Terraform stacks for AWS/GCP/Azure exist and validate in CI, but
-none is applied to a live account). **M0–M3 are closed; M4 (the delivery plane: REST +
-WS API, React dashboard) is next.** Live status: [docs/12-roadmap.md](docs/12-roadmap.md).
+three fully-specified Terraform stacks for AWS/GCP/Azure exist, validate in CI, and are
+realized down to real resources — Fargate/SQS/EFS/Aurora/S3, Cloud Run/Pub/Sub/Filestore/
+Cloud SQL, Container Apps/Service Bus/Files/PostgreSQL — but none is applied to a live
+account). **M0–M5 are closed; M6 (reference architecture & portfolio polish) is in
+progress** — Terraform for all three clouds, `iac-check` CI, runbook review, and cost
+model are done; the simulated-live replay demo mode and final README/ADR/diagram polish
+are what's left. Live status: [docs/12-roadmap.md](docs/12-roadmap.md).
 
 ## What is this? (plain-language overview)
 
@@ -54,15 +58,17 @@ The thing that makes it more than "YOLO plus an LLM wrapper":
 
 | | |
 | --- | --- |
-| Deployment | Local only, `docker compose up` (mediamtx + redis + postgres + api + vision workers + agent) |
+| Deployment | Local only, `docker compose up` (mediamtx + redis + postgres + api + ui + vision workers + agent) |
 | Fast path | YOLO11s (Ultralytics) + ByteTrack, homography/vanishing-point calibration, Shapely zone engine, deterministic rule engine (proximity, zone-dwell, speed) |
 | Slow path | [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent) — Prime Intellect's open-source [RLM](https://www.primeintellect.ai/blog/rlm) (Recursive Language Model) agent — driven headless over a JSON-lines RPC protocol; per-incident trajectory-verification prompt; Band-3 recomputation gate |
+| Delivery plane | FastAPI REST + WS (`api/`), React dashboard (`ui/`) — live incident feed, needs_review queue with a working review action, KPI bar, evidence viewer (clip playback + tracks.jsonl), shift-report rendering; verified against the real running stack including the WS push through the exact proxy path a browser uses |
 | Broker | Redis Streams, time-based retention (`XTRIM MINID`), consumer groups for crash-safe agent consumption |
-| Schemas | Pydantic v2, single source of truth, JSON Schema exported for a future TS dashboard |
-| Benchmark (M1) | YOLO11s @ 35 FPS single-stream 1080p on an RTX A4500 (spike-00); thermal-throttle finding recorded honestly alongside the clean number |
-| Agent eval (M3) | 10 hand-labeled incidents run against the real `prime-agent` CLI: **10/10 validation pass, 9/9 classification agreement**, p50 75.6s — [docs/eval-m3-agent-slow-path.md](docs/eval-m3-agent-slow-path.md) |
-| Tests | 112 passing, offline where possible (`uv run pytest`); a golden-session contract test replays a real captured agent RPC transcript so CI doesn't need the (currently non-public) `prime-agent` package |
-| Honest scope | portfolio project; simulated camera feeds (looped demo clips, not live cameras); real per-camera calibration for the three named demo cameras is still open — only a personal-footage fixture has been calibrated end-to-end so far |
+| Schemas | Pydantic v2, single source of truth, JSON Schema exported for the dashboard |
+| Benchmark (M1/M5) | YOLO11s @ 35 FPS single-stream 1080p, RTX A4500 (spike-00, clean boot); TensorRT FP16 export closed a real M1/M2 doc/reality gap — 34-57% single-stream speedup, and 3-stream FP16 clears the ≥25 FPS/stream floor (30.2 FPS min-stream) under idle-recovered conditions, 9.5-13.2 FPS/stream under sustained thermal load — both published, not just the best case (`docs/benchmarks.md`) |
+| Agent eval (M5) | 30 hand-labeled incidents run against the real `prime-agent` CLI: **86.7% raw validation pass** (all 4 misses were one external timeout, not a capability failure — 100% once retested with the evidence-based recalibrated timeout), **82.1% classification agreement** — [docs/eval-m5-agent-slow-path.md](docs/eval-m5-agent-slow-path.md) |
+| Reference cloud architecture (M6) | Real, validated Terraform for AWS (ECS Fargate/SQS/EFS/Aurora/S3), GCP (Cloud Run/Pub/Sub/Filestore/Cloud SQL), and Azure (Container Apps/Service Bus/Files/PostgreSQL) — `fmt`/`validate` green in CI (`iac-check.yaml`), never applied (ADR-004) |
+| Tests | 149 total (122 passing offline, 27 integration tests gated on a real Postgres — green in CI, skip cleanly without one locally); a golden-session contract test replays a real captured agent RPC transcript so CI doesn't need the (currently non-public) `prime-agent` package |
+| Honest scope | portfolio project; simulated camera feeds (looped demo clips, not live cameras); real per-camera calibration for the three named demo cameras is still open — only a personal-footage fixture has been calibrated end-to-end so far; video+boxes overlay/2D site canvas not built (needs `frame.ticker`, still unwired) |
 
 ## Architecture at a glance
 
@@ -82,6 +88,8 @@ flowchart TD
         PA --> GATE["agent/band3.py<br>independent recomputation cross-check"]
     end
     GATE --> REC[("IncidentRecord<br>confirmed / needs_review")]
+    REC --> API["api/main.py<br>REST + WS, Postgres LISTEN/NOTIFY"]
+    API --> UI["React dashboard<br>incident feed · needs_review queue · evidence viewer"]
 ```
 
 Where things live:
@@ -97,12 +105,14 @@ Where things live:
 | `agent/prime_adapter.py` | The only module allowed to invoke `prime-agent`; external wall-clock timeout+kill on every prompt |
 | `agent/band3.py` | Recomputation cross-check gate (docs/06 §3) |
 | `agent/prompts/` | Per-incident prompt templates (trajectory verification, generic classification) |
-| `evaluation/` | `build_seed_incidents.py` + `agent_eval.py` (the M3 agent eval set/runner), `benchmark_models.py` (fast-path FPS/latency/VRAM) |
-| `api/`, `ui/` | FastAPI + React — M0 scaffolding today; the real REST/WS surface and dashboard land at M4 |
+| `evaluation/` | `build_seed_incidents.py` + `agent_eval.py` (the 30-fixture agent eval set/runner), `benchmark_models.py` (fast-path FPS/latency/VRAM, multi-stream + precision matrix), `eval_tracking.py` (MOTA/IDF1 against MOT17) |
+| `api/` | FastAPI REST + WS, real Postgres-backed persistence (`repository.py`), evidence-serving endpoints, shift-report rendering (`reports.py`) |
+| `ui/` | React dashboard — incident feed with live WS updates, needs_review queue + review form, KPI bar, evidence viewer |
+| `deploy/terraform/` | Real, validated Terraform for AWS/GCP/Azure (`environments/{aws,gcp,azure}/`) — authored and `fmt`/`validate`-checked, never applied (ADR-004) |
 | `config/` | `cameras.yaml`, `zones.yaml`, `rules.yaml` — the deterministic rule configuration |
-| `docs/` | The full design suite: architecture, schemas, security, cost model, risk register, ADRs, spike reports |
-| `tests/` | 112 tests: schema round-trips, rule-engine known-answer tests, calibration math, broker hardening, agent/adapter plumbing against a scripted stand-in, and the golden-session contract replay |
-| `.github/workflows/` | `ci.yaml` (lint/type/test/schema-compat), `contract-agent.yaml` (golden RPC replay), `iac-check.yaml` (`terraform validate` for all three clouds, never applied) |
+| `docs/` | The full design suite: architecture, schemas, security, cost model, risk register, ADRs, spike reports, cloud deployment guides |
+| `tests/` | 149 tests: schema round-trips, rule-engine known-answer tests, calibration math, broker hardening, agent/adapter plumbing against a scripted stand-in, the golden-session contract replay, and (integration, Postgres-gated) API/repository/persistence round-trips |
+| `.github/workflows/` | `ci.yaml` (lint/type/test/schema-compat, Python + React), `contract-agent.yaml` (golden RPC replay), `iac-check.yaml` (`terraform validate` for all three clouds, never applied) |
 
 ## Quickstart
 
@@ -115,12 +125,14 @@ npm registry; see `docker/vendor/README.md` for the current vendoring workaround
 git clone https://github.com/PCSchmidt/sitework-ai
 cd sitework-ai
 uv sync
-uv run pytest              # 112 tests, offline
+uv run pytest              # 122 offline tests; +27 more against a real Postgres
 
 make up                    # docker compose up --build: full local stack,
-                            # simulated camera feeds, no credentials needed
+                            # simulated camera feeds, live dashboard at :5173
 make calib                 # launch the manual camera-calibration CLI
-make agent-eval             # run the seeded incident set against the real prime-agent CLI
+make agent-eval            # run the seeded incident set against the real prime-agent CLI
+make tracking-eval         # MOTA/IDF1 against the MOT17 mirror
+make eval                  # fast-path benchmark harness (single/multi-stream, FP32/FP16)
 ```
 
 ## Approach: why it is built this way
@@ -197,7 +209,10 @@ applied to a live account.
 8. **Record.** Pass → `IncidentRecord` with `state=confirmed`. Fail (schema-invalid,
    Band-3 mismatch, agent timeout/crash) → `state=needs_review`, `rejection_reason` set,
    raw evidence retained for a human reviewer — never a silently dropped or fabricated
-   classification. Postgres persistence + dashboard surfacing land at M4.
+   classification. `agent/persistence.py`'s `PostgresPersister` writes every
+   `IncidentRecord` (confirmed or needs_review) plus its `agent_run` stats to Postgres via
+   `api/repository.py`; a Postgres `LISTEN`/`NOTIFY` trigger pushes it to the dashboard's
+   live incident feed over WebSocket in the same request cycle.
 
 ## Results
 
@@ -213,12 +228,36 @@ All numbers are reproducible from this repo:
   phone footage — which caught two real bugs: a vanishing-point sign ambiguity and an
   overly-strict rotation tolerance that rejected valid noisy real-world line picks.
 - **M3 (agent slow path), measured 2026-09-17:** 10 hand-designed incidents run against
-  the real `prime-agent` 0.9.3 CLI (proximity, zone-intrusion, and speed rule kinds, plus
-  one fixture deliberately designed to make the recomputation gate reject regardless of
-  the agent's answer) — **10/10 validation pass, 9/9 classification agreement, p50 triage
-  latency 75.6s, max 96.0s.** Full table and honest caveats:
+  the real `prime-agent` 0.9.3 CLI — **10/10 validation pass, 9/9 classification
+  agreement, p50 triage latency 75.6s, max 96.0s.** Full table:
   [docs/eval-m3-agent-slow-path.md](docs/eval-m3-agent-slow-path.md).
-- **112 tests pass** (`uv run pytest`), ruff and mypy clean on `pipelines/` and `agent/`.
+- **M4 (delivery plane), 2026-09-17:** real Postgres persistence, FastAPI REST+WS, React
+  dashboard — verified against the actual running docker-compose stack, including a
+  websockets client observing an `incident.created` push through the exact Vite proxy
+  path (`/api`, `/live/ws`) a browser uses, while a raw Postgres `UPDATE` fired it.
+- **M5 (evaluation & tuning), measured 2026-09-18:** eval set expanded 10 → 30 fixtures;
+  raw validation pass 26/30 (86.7%), all 4 misses traced to one external timeout that
+  completed correctly in 48-65s on retest, not a capability failure — timeout
+  recalibrated (150s → 210s) on that evidence, not a guess. Classification agreement
+  23/28 (82.1%), clears its 80% target. TensorRT FP16 benchmark matrix: 34-57%
+  single-stream speedup; 3-stream min-stream FPS is 30.2 (idle-recovered GPU, clears the
+  ≥25 FPS floor) vs. 9.5-13.2 (sustained thermal load, doesn't) — both published, since
+  production sizing needs the worst case, not the best one. MOTA/IDF1 measured for real
+  against MOT17 (0.16-0.46, honestly explained — a generic COCO detector isn't tuned for
+  MOT17's crowd density). Full results:
+  [docs/eval-m5-agent-slow-path.md](docs/eval-m5-agent-slow-path.md),
+  [docs/benchmarks.md](docs/benchmarks.md).
+- **M6 (reference architecture), in progress:** all three clouds' Terraform realized from
+  the AWS PDF spec and the GCP/Azure deployment guides, `fmt`/`validate` green in CI.
+  Three real bugs caught by actually running `terraform validate` against real provider
+  schemas (not by inspection) — a dangling GCP service-account reference, an Azure
+  resource name Azure itself rejects, a wrong Terraform argument name — all fixed in both
+  the `.tf` files and the source docs. The main `ci` workflow itself was also found red
+  since project inception (a pre-existing lint violation plus a broken pnpm workspace
+  config neither ever used in practice) and fixed for real, confirmed via a live CI run.
+- **149 tests** (122 passing offline + 27 Postgres-integration, `uv run pytest`), ruff and
+  mypy clean repo-wide, `npm test`/`npm run build` clean — all verified green in CI, not
+  just locally.
 
 ## Limitations
 
@@ -235,15 +274,22 @@ All numbers are reproducible from this repo:
   tarball as an interim (`docker/vendor/README.md`), and the CI contract test replays a
   real captured transcript rather than driving the live CLI. A private registry (GitHub
   Packages) with build-time auth is the real fix, still owed.
-- **The M3 eval set is small (n=10).** It exercises all three rule kinds and both the
-  confirm and reject paths, but 10 synthetic fixtures is not a statistically tight
-  estimate; it grows to 30+ at M5 per the testing strategy (docs/09 §3).
-- **The delivery plane doesn't exist yet.** `api/` and `ui/` are M0 scaffolding stubs
-  (`/healthz` and empty list routes); the real REST+WS API, React dashboard, and
-  Postgres-backed incident persistence are M4 scope.
+- **The agent eval set (n=30) is still synthetic, hand-built tracklet fixtures, not real
+  camera footage.** It validates the agent/Band-3/schema pipeline end to end, not the
+  fast path's detection/tracking accuracy against real clips (that's `docs/benchmarks.md`'s
+  job) or real-world per-camera calibration (still open, above).
+- **No video+boxes overlay or 2D site canvas in the dashboard.** The incident feed,
+  needs_review queue, and evidence viewer (clip playback) are real and verified; a live
+  view of current track positions needs `frame.ticker` (bridging Redis's per-camera
+  tracklet streams to WS), which stays unwired — `docs/06`'s own §5 flags this.
 - **PPE detection (helmet/vest) isn't built.** The schema has fields for it
-  (`PPEState`); the fine-tuned classifier lands at M5 alongside the full benchmark
-  matrix.
+  (`PPEState`); M5 closed without the fine-tuned classifier landing — genuinely
+  deferred, not silently dropped, and not yet re-scoped to a specific milestone.
+- **The M6 Terraform is real but the multi-cloud benchmark/cost picture leans on a single
+  development GPU.** S2 (≥3 streams ≥25 FPS) is confirmed reachable (idle-recovered) but
+  not guaranteed under continuous production load on this specific laptop-class card — see
+  `docs/benchmarks.md`'s sustained-load numbers, and the explicit recommendation to size
+  cloud deployments off those, not the best case.
 - **Agent budget flags alone are not a trustworthy ceiling** — documented, not hidden:
   spike-01 found `--autonomous-max-turns` did not stop a runaway task, so
   `agent/prime_adapter.py`'s own external timeout is the real backstop, and any future
@@ -257,10 +303,11 @@ All numbers are reproducible from this repo:
 | --- | --- | --- |
 | `mediamtx` | Docker Compose service | Loops pinned demo clips as RTSP (simulated cameras) |
 | `redis` | Docker Compose service | Streams broker: `tracklets:{camera}` (5 min retention), `trigger_events` (1 h retention, consumer groups) |
-| `postgres` | Docker Compose service | Schema exists in docs/06 §6; incident writes land at M4 |
+| `postgres` | Docker Compose service | Real schema (docs/06 §6): `incidents`, `reviews`, `agent_runs`, with a `NOTIFY`-emitting trigger the API listens on for the dashboard's live push |
 | `vision-*` workers | Docker Compose service, one per camera, GPU passthrough | `pipelines.vision.pipeline`, YOLO11s + ByteTrack |
-| `agent/worker.py` | Not yet containerized as a standing service | `docker/Dockerfile.agent` builds and runs `prime-agent --mode rpc`; runnable locally today via `uv run python -m agent.worker` against a running Redis |
-| `api` (FastAPI) | Docker Compose service | M0 stub (`/healthz` only) until M4 |
+| `agent` | Docker Compose service | `docker/Dockerfile.agent` runs `agent.worker` as a standing consumer against Redis, persisting via `PostgresPersister`; verified running end to end inside the actual built image, not just on the host |
+| `api` (FastAPI) | Docker Compose service | Real REST+WS surface (`GET/POST /api/v1/incidents[/review]`, `/api/v1/{cameras,zones,rules,kpis}`, `/live/ws`, evidence + shift-report endpoints) |
+| `ui` | Docker Compose service | Vite dev server proxying `/api`, `/healthz`, `/live/ws` to `api` — the dashboard |
 
 ### Data and keys
 
@@ -268,6 +315,8 @@ All numbers are reproducible from this repo:
 | --- | --- |
 | `REDIS_URL` | broker connection (`pipelines/vision/pipeline.py`, `agent/worker.py`); defaults to `redis://localhost:6379` |
 | `YOLO_WEIGHTS` | override the detector weights path; defaults to `yolo11s.pt` |
+| `DATABASE_URL` | Postgres connection for `api/main.py` and `agent/persistence.py`'s `PostgresPersister`; defaults to the local docker-compose credentials |
+| `WORKSPACE_ROOT` | shared volume the `agent` service writes evidence into and the `api` service serves read-only (`GET /api/v1/incidents/{id}/evidence/*`) |
 | — | `prime-agent`'s own model/API auth (OpenRouter) is configured through its own persistent harness state (`~/.prime/`), not a `sitework-ai` environment variable |
 
 No cloud credentials are used anywhere in this repo's runtime path — the Terraform in
@@ -276,12 +325,16 @@ No cloud credentials are used anywhere in this repo's runtime path — the Terra
 ### Verify the claims (a reviewer's path)
 
 ```bash
-uv run pytest -q                          # 112 tests, offline
-uv run ruff check . && uv run mypy        # lint + types (pipelines/, agent/)
+uv run pytest -q                          # 122 tests offline; +27 with TEST_DATABASE_URL set
+uv run ruff check . && uv run mypy        # lint + types, repo-wide
 uv run python scripts/check_docs.py       # cross-doc consistency gate
-uv run python -m evaluation.agent_eval    # re-run the M3 seeded eval (needs prime-agent installed)
-make up                                   # full local stack, simulated feeds
-curl -s http://localhost:8000/healthz     # API stub liveness
+uv run python -m evaluation.agent_eval    # re-run the 30-fixture seeded eval (needs prime-agent installed)
+uv run python -m evaluation.eval_tracking # re-run MOTA/IDF1 against MOT17
+make up                                   # full local stack, simulated feeds, dashboard at :5173
+curl -s http://localhost:8000/healthz     # API liveness
+curl -s http://localhost:8000/api/v1/kpis # real KPI query against Postgres
+cd ui && npm ci && npm test && npm run build   # dashboard: install, test, build
+cd deploy/terraform/environments/aws && terraform fmt -check && terraform validate  # x3 clouds
 ```
 
 ### Documentation map
@@ -296,12 +349,13 @@ curl -s http://localhost:8000/healthz     # API stub liveness
 | [docs/10-cost-model.md](docs/10-cost-model.md) | LLM spend mechanics, measured vs. estimated cost |
 | [docs/11-risks.md](docs/11-risks.md) | Risk register with measured outcomes, not just guesses |
 | [docs/12-roadmap.md](docs/12-roadmap.md) | Live milestone status — the actual source of truth for "what's done" |
-| [docs/benchmarks.md](docs/benchmarks.md) | M1 fast-path FPS/latency/VRAM numbers |
-| [docs/eval-m3-agent-slow-path.md](docs/eval-m3-agent-slow-path.md) | M3 agent eval results, run against the real CLI |
+| [docs/benchmarks.md](docs/benchmarks.md) | Fast-path FPS/latency/VRAM/MOTA/IDF1 numbers — M1 clean-boot baseline through the M5 precision × stream matrix (sustained-load and idle-recovered, both published) |
+| [docs/eval-m3-agent-slow-path.md](docs/eval-m3-agent-slow-path.md) | M3 agent eval results (n=10), run against the real CLI |
+| [docs/eval-m5-agent-slow-path.md](docs/eval-m5-agent-slow-path.md) | M5 agent eval results (n=30) + the timeout-recalibration retest that backs the 150s→210s change |
 | [docs/prime-agent-feasibility.md](docs/prime-agent-feasibility.md) | The feasibility analysis behind embedding Prime Agent as a runtime component |
 | [docs/spikes/](docs/spikes/) | Time-boxed de-risking spikes (GPU benchmark, forklift class, Prime Agent headless) with honest results |
 | [docs/adr/](docs/adr/) | Architecture decision records |
-| [docs/deployment/](docs/deployment/) | AWS/GCP/Azure reference deployment guides (documentation-only, ADR-004) |
+| [docs/deployment/](docs/deployment/) | AWS/GCP/Azure reference deployment guides — real runbooks for the Terraform in `deploy/terraform/` (documentation-only, ADR-004) |
 
 ## Engineering context
 

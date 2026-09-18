@@ -12,12 +12,20 @@ embedded*.
 | **Trajectory & Collision Inspector** (sub-agent) | proximity / TTC-class triggers | tracklet window file + calibration | verified kinematics: min distance, closing velocity, TTC, retreat/advance classification |
 | **Compliance Auditor** (sub-agent) | all confirmed incidents | incident evidence + `config/rules.yaml` + shift state | severity, rule citations, OSHA-style narrative, recommended action |
 | **Stream Watchdog** (sub-agent, heartbeat) — *optional, M5+* | periodic (60 s) | recent `stream.health` + telemetry stats | offline-camera triage, gap notes (no LLM if all healthy) |
-| **Shift Synthesizer** (sub-agent, scheduled) | shift end (Prime Agent `add_schedule`; shift boundaries from `config/shifts.yaml`) | day's incidents + KPI queries via REPL | Markdown/PDF shift audit, KPI table, trend notes |
+| **Shift Synthesizer** (sub-agent, scheduled) -- **not built**; M4 shipped a deterministic substitute instead (see note below) | shift end (Prime Agent `add_schedule`; shift boundaries from `config/shifts.yaml`) | day's incidents + KPI queries via REPL | Markdown/PDF shift audit, KPI table, trend notes |
 | **Parameter Reviewer** (sub-agent, rare) — *optional, M5+* | recurring false-positive patterns | rejected-trigger stats | *proposal-only* threshold adjustments (human-approved) |
 
 **M3 scope is two sub-agents** (trajectory-inspector, compliance-auditor) plus the dispatcher in
 `worker.py` (not an agent). Watchdog, synthesizer, and parameter-reviewer land at M5/M4 as
 scheduled — keeping M3 aligned with PLAN.md §5.
+
+**M4 update:** what actually shipped for "shift reports" is `api/reports.py` -- a pure-function
+HTML renderer that stitches together each confirmed/needs_review incident's own `narrative_md`
+(itself already agent-written, per-incident, at triage time) for a time window. It is **not** the
+Shift Synthesizer row above: no scheduled agent invocation, no cross-incident KPI-query-via-REPL
+synthesis, no new narrative generated at shift end. Building the real Shift Synthesizer is a
+separate, not-yet-scoped piece of work (a new sub-agent spec + prompt + eval pair), left open
+rather than silently substituted without a note.
 
 ## 2. Sub-Agent Specs (persisted in harness)
 
