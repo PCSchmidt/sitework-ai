@@ -359,7 +359,16 @@ the sustained-load number, since that's the actual production duty cycle, not th
 - [x] `iac-check.yaml` enforcing fmt+validate -- already existed from M0, now actually exercised
       for real: downloaded terraform 1.9.8 locally and ran the exact fmt-check/init/validate
       sequence the CI workflow runs, for all three environments; all green.
-- [ ] Runbook review pass; cost model finalize
+- [x] Runbook review pass; cost model finalize -- done 2026-09-19. Runbooks: GCP/Azure guides
+      referenced a nonexistent `services/` directory for Docker builds (fixed to the real
+      `docker/Dockerfile.{agent,web}` paths); AWS guide referenced a `scripts/smoke_test_telemetry.py`
+      that was never built (replaced with an honest note + a real manual `aws sqs send-message`
+      verification); AWS's architecture table promised Aurora + S3 that the PDF-sourced Terraform
+      never included (added `db.tf`/`s3.tf` for real 3-cloud parity). Cost model: corrected a real
+      inaccuracy -- Aurora Serverless v2 and GCP Cloud SQL both have no true pause/scale-to-zero
+      (only Serverless v1, which doesn't support Postgres in most regions, could do that); Scenario
+      A's idle/mo figures revised from ~$5-15 (implicitly assumed a free DB) to ~$50-65/~$55-75/
+      ~$20-40 across AWS/GCP/Azure. See `docs/10-cost-model.md` §4 for the reasoning.
 - [ ] Simulated-live replay mode (fixtures → cloud backend) for the $0 public demo
 - [ ] README narrative, ADR finalization, demo GIF/video, architecture diagrams (C4 + sequence)
 - [ ] Helm chart explicitly descoped (stretch only, not part of M6 exit)
