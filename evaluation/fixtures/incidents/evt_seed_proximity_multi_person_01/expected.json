@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "violation",
+  "check_classification": true,
+  "notes": "a second, distant (10m) person is present in every frame as a distractor"
+}

@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "normal_ops",
+  "check_classification": true,
+  "notes": "min_distance 2.05m -- just outside the near_miss boundary"
+}

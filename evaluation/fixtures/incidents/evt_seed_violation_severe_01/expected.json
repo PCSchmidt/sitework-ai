@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "violation",
+  "check_classification": true,
+  "notes": "min_distance 0.2m -- near-contact severe violation"
+}

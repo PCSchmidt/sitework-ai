@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "violation",
+  "check_classification": true,
+  "notes": "speed_mps more than double the 2.2 m/s limit"
+}

@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "near_miss",
+  "check_classification": true,
+  "notes": "8-frame window, distance plateaus at 1.5m near_miss rather than a single dip"
+}

@@ -2,7 +2,7 @@
 
 COMPOSE := docker compose -f docker/docker-compose.yml
 
-.PHONY: up down eval calib test iac report docs-check schema-export agent-eval
+.PHONY: up down eval calib test iac report docs-check schema-export agent-eval tracking-eval
 
 up:        ## docker compose up --build (full stack, simulated feeds)
 	$(COMPOSE) up --build
@@ -24,6 +24,9 @@ eval:      ## headless benchmark + eval harness (GPU)
 
 agent-eval: ## run the seeded incident set against the real prime-agent CLI (docs/09 §3)
 	uv run python -m evaluation.agent_eval
+
+tracking-eval: ## MOTA/IDF1 on the MOT17 mirror (docs/09 §4, M5)
+	uv run python -m evaluation.eval_tracking
 
 calib:     ## launch manual homography calibration tool
 	uv run python -m pipelines.geometry.calibrate

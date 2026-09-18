@@ -2,5 +2,5 @@
   "expected_state": "confirmed",
   "expected_classification": "false_positive",
   "check_classification": true,
-  "notes": "dwell claim doesn't hold up against tracks.jsonl (1 of 5 frames in zone)"
+  "notes": "track is in the zone for only the first captured frame, then leaves for good"
 }

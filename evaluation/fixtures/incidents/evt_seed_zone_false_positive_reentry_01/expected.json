@@ -2,5 +2,5 @@
   "expected_state": "confirmed",
   "expected_classification": "false_positive",
   "check_classification": true,
-  "notes": "dwell claim doesn't hold up against tracks.jsonl (1 of 5 frames in zone)"
+  "notes": "track exits and re-enters the zone -- claimed continuous dwell is false"
 }

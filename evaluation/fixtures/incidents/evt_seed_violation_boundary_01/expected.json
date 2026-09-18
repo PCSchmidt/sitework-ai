@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "violation",
+  "check_classification": true,
+  "notes": "min_distance 0.95m -- just inside the <1.0m violation boundary"
+}

@@ -1,0 +1,6 @@
+{
+  "expected_state": "needs_review",
+  "expected_classification": null,
+  "check_classification": false,
+  "notes": "TriggerEvent claims min_distance_m=0.5 (violation) but tracks.jsonl's real minimum is 2.7m (normal_ops) -- a larger fast-path/evidence gap than fixture 5"
+}

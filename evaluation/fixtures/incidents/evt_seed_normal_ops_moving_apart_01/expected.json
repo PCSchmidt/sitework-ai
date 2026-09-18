@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "normal_ops",
+  "check_classification": true,
+  "notes": "distance only increases across the window -- separating, not closing"
+}

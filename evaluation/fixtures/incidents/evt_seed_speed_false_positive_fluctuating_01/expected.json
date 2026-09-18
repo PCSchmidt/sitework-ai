@@ -2,5 +2,5 @@
   "expected_state": "confirmed",
   "expected_classification": "false_positive",
   "check_classification": true,
-  "notes": "dwell claim doesn't hold up against tracks.jsonl (1 of 5 frames in zone)"
+  "notes": "speed_mps hovers near 2.2 m/s but never actually crosses it"
 }

@@ -1,0 +1,6 @@
+{
+  "expected_state": "confirmed",
+  "expected_classification": "violation",
+  "check_classification": true,
+  "notes": "dwell 3.1s -- just over the dwell_s=3.0 threshold, full-window presence"
+}

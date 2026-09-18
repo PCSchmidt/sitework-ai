@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "event_id": "evt_seed_violation_severe_01",
+  "trigger_ts": 1003.0,
+  "camera_id": "dock_north_01",
+  "rule_id": "proximity_forklift_pedestrian",
+  "severity_hint": "high",
+  "metrics": {
+    "min_distance_m": 0.2,
+    "duration_s": 3.0,
+    "closing_speed_mps": 1.4
+  },
+  "involved_track_ids": [
+    42,
+    77
+  ],
+  "track_window_ref": "incidents/evt_seed_violation_severe_01/tracks.jsonl",
+  "clip_ref": null,
+  "cooldown_key": "dock_north_01:proximity:evt_seed_violation_severe_01",
+  "calibration_quality": {
+    "rms_px": 1.1,
+    "valid": true
+  }
+}
