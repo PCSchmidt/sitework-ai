@@ -45,3 +45,13 @@ data/raw/spike02-finetune/
 # Vendored prime-agent tarball (spike-01): private package, not on npm's public
 # registry -- see docker/vendor/README.md. Never commit the binary itself.
 docker/vendor/*.tgz
+.tools/
+
+# Terraform (ADR-004: authored + validate-checked, never applied by automation --
+# no real state/plan ever exists here, but keep the working-dir artifacts out anyway).
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log

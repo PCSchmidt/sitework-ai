@@ -51,6 +51,15 @@ locals {
              ttl = "30d", environment = "reference" }  # ttl = auto-expiry tag
 }
 
+# Service account the push subscription below authenticates as (OIDC) -- real
+# resource this guide referenced without defining until `terraform validate`
+# caught the dangling reference.
+resource "google_service_account" "run_invoker" {
+  account_id   = "sitewatch-ai-run-invoker"
+  display_name = "SiteWatch AI Pub/Sub -> Cloud Run push invoker"
+  project      = local.project_id
+}
+
 # --- Pub/Sub: anomaly events + dead-letter topic -----------------------------
 resource "google_pubsub_topic" "anomaly_dlq" {
   name    = "sitewatch-ai-anomaly-dlq"

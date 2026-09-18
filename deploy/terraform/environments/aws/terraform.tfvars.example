@@ -1,2 +1,15 @@
-project     = "sitewatch-ai"
-environment = "reference"
+# Copy to terraform.tfvars and fill in real values before `terraform plan` --
+# never committed with real account/VPC IDs. `apply` is a manual, human-run
+# action (docs/deployment/aws-deployment-guide.md); never run in CI (ADR-004).
+
+aws_region   = "us-east-1"
+environment  = "reference"
+project_name = "sitewatch-ai"
+
+# Required -- no defaults, these are account-specific.
+vpc_id              = "vpc-REPLACE_ME"
+private_subnet_ids  = ["subnet-REPLACE_ME_A", "subnet-REPLACE_ME_B"]
+agent_image_uri     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/sitewatch-agent:latest"
+
+# cpu   = 1024  # 1 vCPU
+# memory = 2048 # 2 GB

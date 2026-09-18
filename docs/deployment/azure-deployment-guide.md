@@ -62,7 +62,7 @@ resource "azurerm_resource_group" "rg" {
 
 # --- Service Bus: anomaly events queue + dead-letter subqueue ----------------
 resource "azurerm_servicebus_namespace" "sb" {
-  name                = "sitewatch-ai-sb"
+  name                = "sitewatch-ai-servicebus"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   sku                 = "Standard"
@@ -93,7 +93,7 @@ resource "azurerm_storage_share" "prime_state" {
   name                 = "prime-state"   # mounted at /home/node/.prime
   storage_account_name = azurerm_storage_account.prime_state.name
   quota                = 100             # GiB
-  protocol             = "NFS"
+  enabled_protocol     = "NFS"
 }
 
 # --- Blob Storage: incident clips --------------------------------------------
@@ -114,13 +114,18 @@ resource "azurerm_storage_container" "incident_clips" {
 
 # --- Azure Database for PostgreSQL Flexible Server ---------------------------
 resource "azurerm_postgresql_flexible_server" "pg" {
-  name                   = "psql-sitewatch-ai"
-  resource_group_name    = azurerm_resource_group.rg.name
-  location               = azurerm_resource_group.rg.location
-  version                = "15"
-  sku_name               = "B_Standard_B1ms"   # smallest burstable SKU
-  storage_mb             = 32768
-  tags                   = local.tags
+  name                    = "psql-sitewatch-ai"
+  resource_group_name     = azurerm_resource_group.rg.name
+  location                = azurerm_resource_group.rg.location
+  version                 = "15"
+  sku_name                = "B_Standard_B1ms"   # smallest burstable SKU
+  storage_mb              = 32768
+  # Required by the provider (not optional) -- var.postgres_admin_password has
+  # no default on purpose; set it via TF_VAR_postgres_admin_password or a real
+  # secrets backend, never a committed tfvars file.
+  administrator_login     = var.postgres_admin_login
+  administrator_password  = var.postgres_admin_password
+  tags                    = local.tags
 }
 ```
 
@@ -166,7 +171,7 @@ WORKER=$(az containerapp show -g rg-sitewatch-ai -n sitewatch-ai-worker \
   --query identity.principalId -o tsv)
 BACKEND=$(az containerapp show -g rg-sitewatch-ai -n sitewatch-ai-backend \
   --query identity.principalId -o tsv)
-SB_ID=$(az servicebus namespace show -g rg-sitewatch-ai -n sitewatch-ai-sb --query id -o tsv)
+SB_ID=$(az servicebus namespace show -g rg-sitewatch-ai -n sitewatch-ai-servicebus --query id -o tsv)
 
 # 1. Worker: receive + send on the anomaly queue ONLY
 az role assignment create --assignee-object-id ${WORKER} --assignee-principal-type ServicePrincipal \
@@ -195,7 +200,7 @@ Inject a synthetic anomaly event and verify the full SLOW PATH response.
 ```bash
 # 1. Send a synthetic geofence-intrusion trigger (matches FAST PATH schema)
 SB_CS=$(az servicebus namespace authorization-rule keys list \
-  -g rg-sitewatch-ai --namespace-name sitewatch-ai-sb -n RootManageSharedAccessKey \
+  -g rg-sitewatch-ai --namespace-name sitewatch-ai-servicebus -n RootManageSharedAccessKey \
   --query primaryConnectionString -o tsv)
 az servicebus queue send --connection-string ${SB_CS} \
   --queue-name sitewatch-ai-anomaly-events --message '{
@@ -206,7 +211,7 @@ az servicebus queue send --connection-string ${SB_CS} \
 }'
 
 # 2. Confirm the queue drained (no dead-letter accumulation)
-az servicebus queue show -g rg-sitewatch-ai --namespace-name sitewatch-ai-sb \
+az servicebus queue show -g rg-sitewatch-ai --namespace-name sitewatch-ai-servicebus \
   -n sitewatch-ai-anomaly-events --query "countDetails.{active:activeMessages,dlq:deadLetterMessageCount}" -o table
 
 # 3. Check the worker logs for the expected agent pipeline stages

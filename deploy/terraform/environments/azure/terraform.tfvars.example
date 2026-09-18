@@ -1,2 +1,7 @@
-project     = "sitewatch-ai"
 environment = "reference"
+
+# postgres_admin_login is fine to leave at its default; set the password via
+# TF_VAR_postgres_admin_password (env var) or a real secrets backend -- never
+# put a real password in a committed tfvars file.
+# postgres_admin_login    = "sitewatch_admin"
+# postgres_admin_password = "REPLACE_ME"
