@@ -4,7 +4,8 @@
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical'
 export type IncidentState = 'confirmed' | 'needs_review'
-export type Classification = 'near_miss' | 'false_positive' | 'true_positive' | 'ambiguous'
+// pipelines/schemas/models.py's Classification StrEnum, kept in sync by hand.
+export type Classification = 'normal_ops' | 'near_miss' | 'violation' | 'false_positive'
 
 export interface KinematicsVerdict {
   verified_min_distance_m: number | null
