@@ -7,7 +7,7 @@ A hybrid deterministic/probabilistic computer vision system for warehouses and c
 | --- | --- |
 | Project | SiteWatch AI (`sitework-ai`) |
 | Type | Portfolio / reference-architecture project (no live cloud deployment required) |
-| Status | M0–M5 closed (see `docs/12-roadmap.md`); M6 (reference architecture & portfolio polish) in progress -- Terraform for all 3 clouds + iac-check + runbook review + cost model done, simulated-live replay mode and portfolio polish remaining |
+| Status | M0–M5 closed (see `docs/12-roadmap.md`); M6 (reference architecture & portfolio polish) in progress -- Terraform for all 3 clouds + iac-check + runbook review + cost model + simulated-live replay mode done, portfolio polish (README/ADR/diagrams) remaining |
 | Source of idea | `project_concepts_ideas.md` (Gemini conversation, summarized in [docs/01-vision-and-scope.md](docs/01-vision-and-scope.md)) |
 | Existing IaC artifact | `SiteWatch AI - AWS ECS Fargate & EFS Terraform Configuration.pdf` (full AWS Terraform spec) |
 
@@ -109,7 +109,7 @@ Effort estimates assume evenings/weekends pace (~10–15 h/week).
 | **M3 — Agent slow path** ✅ CLOSED | **M3.0 feasibility spike first** (`docs/prime-agent-feasibility.md` §5 → ADR-005), then embedded Prime Agent via RPC adapter (`agent/prime_adapter.py`, pinned version, contract test); sub-agent specs (trajectory inspector, compliance auditor); Pydantic-verified outputs + recomputation gate; incident DB writes | 2–3 weeks | Spike pass criteria met; S3 met end-to-end: anomaly → agent incident report with verified kinematics; first-try validation ≥ 90% — **met: 10/10 on the seeded set, `docs/eval-m3-agent-slow-path.md`.** Incident DB writes deferred to M4 (storage-layer follow-up, not an agent-pipeline gap) |
 | **M4 — Delivery plane** ✅ CLOSED | FastAPI REST + WebSocket stream, React dashboard (incident feed, needs_review queue, evidence viewer, KPI bar), clip persistence + evidence endpoints, shift report rendering | 2 weeks | Live dashboard plays a real incident end to end -- **met**: verified against the real docker-compose stack, including the WS push through the exact proxy path the browser uses. Video+boxes overlay/2D site canvas deferred (needs `frame.ticker`, still unwired) |
 | **M5 — Evaluation & tuning** ✅ CLOSED | Full benchmark matrix (2 models × 2 precisions × 1-3 streams), MOTA/IDF1 on MOT17, expanded eval set (10→30), threshold calibration, `docs/benchmarks.md` | 1–2 weeks | **S2 and S6 met.** S2 confirmed via an idle-recovered-GPU rerun (3-stream FP16 TensorRT: 30.2 FPS min-stream); the sustained-load floor (9.5-13.2 FPS/stream) is published alongside it for honest production sizing. S6 met for the deterministic (benchmark/tracking) harnesses; `make agent-eval` stays CLI-availability-gated (prime-agent's pre-existing private-registry gap) |
-| **M6 — Reference architecture** (in progress) | Terraform for AWS (from existing PDF spec), GCP, Azure; `iac-check` CI; three cloud runbooks; cost model; ADRs finalized; simulated-live replay mode for public demo | 2 weeks | S5 met; public portfolio demo costs $0/mo -- **S5 met**: all 3 environments' Terraform realized and `fmt`/`validate` green (verified locally and via `iac-check` CI); runbook review + cost model finalize done. Remaining: simulated-live replay mode, README/ADR/diagram polish |
+| **M6 — Reference architecture** (in progress) | Terraform for AWS (from existing PDF spec), GCP, Azure; `iac-check` CI; three cloud runbooks; cost model; ADRs finalized; simulated-live replay mode for public demo | 2 weeks | S5 met; public portfolio demo costs $0/mo -- **S5 met**: all 3 environments' Terraform realized and `fmt`/`validate` green (verified locally and via `iac-check` CI); runbook review + cost model finalize done; simulated-live replay mode done (`scripts/replay_demo.py`, `make replay-up`, real bugs found and fixed by actually running the stack -- docs/12 M6). Remaining: README/ADR/diagram polish |
 
 Full milestone detail with task breakdowns: [docs/12-roadmap.md](docs/12-roadmap.md).
 
@@ -161,8 +161,7 @@ M0's original bootstrap checklist (repo skeleton, dataset licensing, first detec
 is long done -- superseded here rather than left stale; see `docs/12-roadmap.md` for the full
 milestone-by-milestone history. Current, as of M6 in progress (2026-09-19):
 
-1. Simulated-live replay mode (fixtures → cloud backend) for the $0 public demo.
-2. README narrative pass, ADR finalization, demo GIF/video, architecture diagrams (C4 + sequence).
-3. Optional stretch, not part of M6 exit: stream watchdog + parameter-reviewer sub-agents
+1. README narrative pass, ADR finalization, demo GIF/video, architecture diagrams (C4 + sequence).
+2. Optional stretch, not part of M6 exit: stream watchdog + parameter-reviewer sub-agents
    (docs/05 §1, marked optional since M0.5); a genuine cold-boot (not idle-recovered) rerun of the
    M5 multi-stream benchmark matrix for an even cleaner S2 best-case number.

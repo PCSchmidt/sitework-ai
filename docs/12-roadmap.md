@@ -3,12 +3,21 @@
 Sequencing principle: every milestone ends in something demoable. Effort assumes ~10–15 h/week.
 
 ## M0 — Scaffolding (1 week)
-- [ ] Repo skeleton per docs/07; `uv` envs, ruff/mypy/pytest configs, pnpm UI scaffold
-- [ ] `docker-compose.yml`: mediamtx + redis + postgres + api (stub) + ui (stub) + vision (stub)
-- [ ] CI: `ci.yaml` + `iac-check.yaml` (validate-only) green on empty pipelines
-- [ ] `config/*.yaml` schemas + Pydantic settings validation (fail-fast loader)
-- [ ] Pydantic v2 schemas for TrackletFrame/TriggerEvent + JSON Schema export
+- [x] Repo skeleton per docs/07; `uv` envs, ruff/mypy/pytest configs, UI scaffold -- originally
+      planned as a pnpm scaffold; the `pnpm-workspace.yaml` drafted here was never actually filled
+      in and silently broke the `ci` workflow's `ui` job on every push from this point through M5
+      (`docker-compose.yml`'s `ui` service had always used npm in practice) -- found and fixed as
+      part of M6's doc-alignment pass, see that entry below
+- [x] `docker-compose.yml`: mediamtx + redis + postgres + api (stub) + ui (stub) + vision (stub)
+- [x] CI: `ci.yaml` + `iac-check.yaml` (validate-only) green on empty pipelines -- `ci.yaml` was
+      not actually green from here through M5 (see above); `iac-check.yaml` existed but wasn't
+      exercised against real Terraform until M6 (see that entry)
+- [x] `config/*.yaml` schemas + Pydantic settings validation (fail-fast loader)
+- [x] Pydantic v2 schemas for TrackletFrame/TriggerEvent + JSON Schema export
 **Exit:** `make up` boots all containers; schema round-trip test green.
+**M0 CLOSED 2026-09-16** (per PLAN.md's milestone table and every later milestone building on it);
+these checkboxes were left unchecked at the time and are corrected here retroactively, not backdated
+as newly-done work.
 
 ## M0.5 — Doc-consistency pass (2–3 days, blocks M1)
 - [x] Resolve Band-3 tolerances (0.15 m / 0.2 m/s / 0.2 s / 5% rel) — single normative spec in docs/06 §3

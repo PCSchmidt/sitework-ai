@@ -18,7 +18,9 @@ sitework-ai/
 │   ├── Dockerfile.vision             # CUDA/TensorRT runtime, GStreamer, OpenCV
 │   ├── Dockerfile.agent              # Node + Python 3.11, prime-agent, pinned version
 │   ├── Dockerfile.web                # FastAPI backend
-│   └── docker-compose.yml            # one-command local full stack
+│   ├── Dockerfile.replay             # pure-Python, no Node/GPU -- $0 public demo (M6)
+│   ├── docker-compose.yml            # one-command local full stack
+│   └── docker-compose.replay.yml     # $0 public demo stack (make replay-up, M6)
 ├── pipelines/
 │   ├── ingestion/                    # MP4→RTSP streamer config, MediaMTX setup, frame source
 │   ├── vision/                       # detector.py, tracker.py, rules.py, pipeline.py, evidence.py
@@ -51,7 +53,8 @@ sitework-ai/
 │   └── helm/                         # optional cloud-agnostic K8s chart (stretch; descoped from M6)
 ├── assets/clips/                     # pinned demo clips + licenses
 ├── data/manifests/                   # dataset versions, licenses, SHA256
-├── scripts/                          # check_docs.py, smoke_test.py, record_golden_session.py
+├── scripts/                          # check_docs.py, smoke_test.py, record_golden_session.py,
+│                                      # replay_demo.py ($0 public demo, M6)
 ├── tests/                            # unit / integration / contract tests; fixtures/ holds the
 │                                      # captured golden prime-agent RPC session
 └── .github/workflows/                # ci.yaml, iac-check.yaml, contract-agent.yaml, eval.yaml
@@ -62,7 +65,11 @@ sitework-ai/
 
 - **Python 3.11+**, `uv` for env management, `ruff` (lint+format), `mypy` on `pipelines/` and
   `agent/` (`pyproject.toml`'s `[tool.mypy] files`), `pytest`.
-- **TypeScript** (React dashboard): `pnpm`, eslint + prettier, vitest.
+- **TypeScript** (React dashboard): `npm` (switched from an initial `pnpm` plan -- the
+  `pnpm-workspace.yaml` scaffolded at M0 was never actually filled in and silently broke the `ci`
+  workflow's `ui` job on every push since project inception; `docker-compose.yml`'s `ui` service had
+  always used `npm install && npm run dev` in practice, so CI was fixed to match reality rather than
+  the other way around -- docs/12-roadmap.md's M6 doc-alignment entry), eslint + prettier, vitest.
 - **Schemas:** everything crossing a process boundary is a Pydantic model in `pipelines/schemas`;
   TS types generated from exported JSON Schema. No hand-rolled dicts across the boundary.
 - **Agent invocation:** only `agent/prime_adapter.py` may touch prime-agent. Exact pinned version in
@@ -86,11 +93,12 @@ sitework-ai/
 ## 4. Make targets (developer UX)
 
 ```makefile
-make up         # docker compose up --build (full stack, simulated feeds)
-make eval       # headless benchmark + eval harness
-make agent-eval # run the seeded incident set against the real prime-agent CLI (docs/09 §3)
-make calib      # launch manual homography calibration tool
-make test       # unit + integration + contract tests
-make iac        # terraform fmt -check && validate for all three clouds
-make report     # regenerate docs/benchmarks.md + shift-report samples
+make up          # docker compose up --build (full stack, simulated feeds)
+make eval        # headless benchmark + eval harness
+make agent-eval  # run the seeded incident set against the real prime-agent CLI (docs/09 §3)
+make calib       # launch manual homography calibration tool
+make test        # unit + integration + contract tests
+make iac         # terraform fmt -check && validate for all three clouds
+make report      # regenerate docs/benchmarks.md + shift-report samples
+make replay-up   # $0 public demo stack: postgres + api + ui + fixture replay, no GPU/LLM (M6)
 ```

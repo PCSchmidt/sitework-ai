@@ -7,7 +7,7 @@
 | Unit | schemas, geometry (homography known-answer tests), rule engine (synthetic tracklets), adapter serialization | pytest, fast, no GPU |
 | Integration | compose stack with synthetic feeds: detector on fixture image → tracklet → trigger → agent stub → API | docker compose + pytest |
 | Contract | golden RPC session vs pinned prime-agent; schema compat between TS/Py | CI `contract-agent.yaml` |
-| E2E replay | recorded tracklet fixtures replayed over WS; snapshot dashboard states | pytest + vitest |
+| E2E replay | recorded tracklet fixtures replayed over WS; snapshot dashboard states | **not built** -- `ui`'s `npm test` is `vitest run --passWithNoTests` (zero vitest tests exist); the closest real thing is `scripts/replay_demo.py` (M6), which replays fixtures into the real API/DB/WS path for a live demo, not as an automated dashboard-snapshot test |
 | Benchmark | FPS/latency/VRAM matrix, MOTA/IDF1 | `evaluation/`, manual dispatch, GPU |
 
 ## 2. Known-Answer Tests (determinism proofs)

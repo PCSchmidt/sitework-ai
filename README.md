@@ -67,7 +67,7 @@ The thing that makes it more than "YOLO plus an LLM wrapper":
 | Benchmark (M1/M5) | YOLO11s @ 35 FPS single-stream 1080p, RTX A4500 (spike-00, clean boot); TensorRT FP16 export closed a real M1/M2 doc/reality gap — 34-57% single-stream speedup, and 3-stream FP16 clears the ≥25 FPS/stream floor (30.2 FPS min-stream) under idle-recovered conditions, 9.5-13.2 FPS/stream under sustained thermal load — both published, not just the best case (`docs/benchmarks.md`) |
 | Agent eval (M5) | 30 hand-labeled incidents run against the real `prime-agent` CLI: **86.7% raw validation pass** (all 4 misses were one external timeout, not a capability failure — 100% once retested with the evidence-based recalibrated timeout), **82.1% classification agreement** — [docs/eval-m5-agent-slow-path.md](docs/eval-m5-agent-slow-path.md) |
 | Reference cloud architecture (M6) | Real, validated Terraform for AWS (ECS Fargate/SQS/EFS/Aurora/S3), GCP (Cloud Run/Pub/Sub/Filestore/Cloud SQL), and Azure (Container Apps/Service Bus/Files/PostgreSQL) — `fmt`/`validate` green in CI (`iac-check.yaml`), never applied (ADR-004) |
-| Tests | 149 total (122 passing offline, 27 integration tests gated on a real Postgres — green in CI, skip cleanly without one locally); a golden-session contract test replays a real captured agent RPC transcript so CI doesn't need the (currently non-public) `prime-agent` package |
+| Tests | 157 total (130 passing offline, 27 integration tests gated on a real Postgres — green in CI, skip cleanly without one locally); a golden-session contract test replays a real captured agent RPC transcript so CI doesn't need the (currently non-public) `prime-agent` package |
 | Honest scope | portfolio project; simulated camera feeds (looped demo clips, not live cameras); real per-camera calibration for the three named demo cameras is still open — only a personal-footage fixture has been calibrated end-to-end so far; video+boxes overlay/2D site canvas not built (needs `frame.ticker`, still unwired) |
 
 ## Architecture at a glance
@@ -111,7 +111,7 @@ Where things live:
 | `deploy/terraform/` | Real, validated Terraform for AWS/GCP/Azure (`environments/{aws,gcp,azure}/`) — authored and `fmt`/`validate`-checked, never applied (ADR-004) |
 | `config/` | `cameras.yaml`, `zones.yaml`, `rules.yaml` — the deterministic rule configuration |
 | `docs/` | The full design suite: architecture, schemas, security, cost model, risk register, ADRs, spike reports, cloud deployment guides |
-| `tests/` | 149 tests: schema round-trips, rule-engine known-answer tests, calibration math, broker hardening, agent/adapter plumbing against a scripted stand-in, the golden-session contract replay, and (integration, Postgres-gated) API/repository/persistence round-trips |
+| `tests/` | 157 tests: schema round-trips, rule-engine known-answer tests, calibration math, broker hardening, agent/adapter plumbing against a scripted stand-in, the golden-session contract replay, replay-mode fixture recomputation, and (integration, Postgres-gated) API/repository/persistence round-trips |
 | `.github/workflows/` | `ci.yaml` (lint/type/test/schema-compat, Python + React), `contract-agent.yaml` (golden RPC replay), `iac-check.yaml` (`terraform validate` for all three clouds, never applied) |
 
 ## Quickstart
@@ -125,7 +125,7 @@ npm registry; see `docker/vendor/README.md` for the current vendoring workaround
 git clone https://github.com/PCSchmidt/sitework-ai
 cd sitework-ai
 uv sync
-uv run pytest              # 122 offline tests; +27 more against a real Postgres
+uv run pytest              # 130 offline tests; +27 more against a real Postgres
 
 make up                    # docker compose up --build: full local stack,
                             # simulated camera feeds, live dashboard at :5173
@@ -259,7 +259,7 @@ All numbers are reproducible from this repo:
   the `.tf` files and the source docs. The main `ci` workflow itself was also found red
   since project inception (a pre-existing lint violation plus a broken pnpm workspace
   config neither ever used in practice) and fixed for real, confirmed via a live CI run.
-- **149 tests** (122 passing offline + 27 Postgres-integration, `uv run pytest`), ruff and
+- **157 tests** (130 passing offline + 27 Postgres-integration, `uv run pytest`), ruff and
   mypy clean repo-wide, `npm test`/`npm run build` clean — all verified green in CI, not
   just locally.
 
