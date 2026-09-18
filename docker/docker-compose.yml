@@ -74,8 +74,16 @@ services:
     image: sitework-vision:latest   # all three workers share this one image
     environment: &vision-env
       REDIS_URL: redis://redis:6379
+      # Must match the agent service's --evidence-root (/workspace/incidents) --
+      # both defaulted to a bare relative "incidents" until this was wired, which
+      # silently wrote evidence to two different, unshared directories (this
+      # container's own filesystem vs the agent container's), a real gap only the
+      # M4 smoke test's direct-Redis-injection path (bypassing vision entirely)
+      # never exercised. docs/02 §2.
+      EVIDENCE_ROOT: /workspace/incidents
     volumes: &vision-volumes
       - ../data/models:/models:ro
+      - agent_workspace:/workspace
     command: ["python3", "-m", "pipelines.vision.pipeline",
               "--camera-id", "dock_north_01",
               "--url", "rtsp://mediamtx:8554/dock_north_01"]

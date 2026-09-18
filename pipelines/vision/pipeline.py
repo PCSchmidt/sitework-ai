@@ -177,6 +177,7 @@ def run_stream(
 def main() -> None:
     import argparse
     import os
+    from pathlib import Path
 
     ap = argparse.ArgumentParser(description="Fast-path vision worker (docs/02)")
     ap.add_argument("--camera-id", required=True)
@@ -186,6 +187,15 @@ def main() -> None:
     ap.add_argument("--redis", default=os.environ.get("REDIS_URL", "redis://localhost:6379"))
     ap.add_argument("--imgsz", type=int, default=640)
     ap.add_argument("--confidence-gate", type=float, default=0.4)
+    ap.add_argument(
+        "--evidence-root",
+        default=os.environ.get("EVIDENCE_ROOT", "incidents"),
+        help="must match agent/worker.py's --evidence-root for the two containers to see the "
+        "same tracks.jsonl/clip.mp4 files (docs/02 §2) -- defaulting both to a bare relative "
+        "'incidents' silently wrote to two different, unshared directories when run in separate "
+        "containers with no shared volume; real multi-container operation requires pointing both "
+        "at the same mounted path (docker-compose.yml's agent_workspace volume).",
+    )
     args = ap.parse_args()
 
     detector = Detector(
@@ -197,7 +207,7 @@ def main() -> None:
     calibration = load_calibration(args.camera_id)
     zone_engine = ZoneEngine(load_zones()) if calibration is not None else None
     rule_engine = RuleEngine(load_rules())
-    evidence_capture = EvidenceCapture()
+    evidence_capture = EvidenceCapture(out_dir=Path(args.evidence_root))
     run_stream(
         args.camera_id,
         args.url,

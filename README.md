@@ -8,9 +8,9 @@ three fully-specified Terraform stacks for AWS/GCP/Azure exist, validate in CI, 
 realized down to real resources — Fargate/SQS/EFS/Aurora/S3, Cloud Run/Pub/Sub/Filestore/
 Cloud SQL, Container Apps/Service Bus/Files/PostgreSQL — but none is applied to a live
 account). **M0–M5 are closed; M6 (reference architecture & portfolio polish) is in
-progress** — Terraform for all three clouds, `iac-check` CI, runbook review, and cost
-model are done; the simulated-live replay demo mode and final README/ADR/diagram polish
-are what's left. Live status: [docs/12-roadmap.md](docs/12-roadmap.md).
+progress** — Terraform for all three clouds, `iac-check` CI, runbook review, cost
+model, and the simulated-live replay demo mode (`make replay-up`) are done; final
+README/ADR/diagram polish is what's left. Live status: [docs/12-roadmap.md](docs/12-roadmap.md).
 
 ## What is this? (plain-language overview)
 
@@ -259,6 +259,11 @@ All numbers are reproducible from this repo:
   the `.tf` files and the source docs. The main `ci` workflow itself was also found red
   since project inception (a pre-existing lint violation plus a broken pnpm workspace
   config neither ever used in practice) and fixed for real, confirmed via a live CI run.
+  Separately, `scripts/replay_demo.py` + `make replay-up` deliver the $0 public-demo stack
+  itself: postgres + api + ui + a pure-Python fixture-replay service, no GPU and no LLM call
+  in the loop — verified against a live Postgres/API, including two real bugs a live test
+  caught (a compose project-name collision that recreated the main dev stack's own postgres
+  container, and a startup race fixed with proper healthchecks).
 - **157 tests** (130 passing offline + 27 Postgres-integration, `uv run pytest`), ruff and
   mypy clean repo-wide, `npm test`/`npm run build` clean — all verified green in CI, not
   just locally.
@@ -353,6 +358,7 @@ cd deploy/terraform/environments/aws && terraform fmt -check && terraform valida
 | [docs/10-cost-model.md](docs/10-cost-model.md) | LLM spend mechanics, measured vs. estimated cost |
 | [docs/11-risks.md](docs/11-risks.md) | Risk register with measured outcomes, not just guesses |
 | [docs/12-roadmap.md](docs/12-roadmap.md) | Live milestone status — the actual source of truth for "what's done" |
+| [docs/13-architecture-diagrams.md](docs/13-architecture-diagrams.md) | C4 context + container diagrams, and sequence diagrams for the real incident flow and the replay-mode flow |
 | [docs/benchmarks.md](docs/benchmarks.md) | Fast-path FPS/latency/VRAM/MOTA/IDF1 numbers — M1 clean-boot baseline through the M5 precision × stream matrix (sustained-load and idle-recovered, both published) |
 | [docs/eval-m3-agent-slow-path.md](docs/eval-m3-agent-slow-path.md) | M3 agent eval results (n=10), run against the real CLI |
 | [docs/eval-m5-agent-slow-path.md](docs/eval-m5-agent-slow-path.md) | M5 agent eval results (n=30) + the timeout-recalibration retest that backs the 150s→210s change |

@@ -48,3 +48,11 @@ private-registry fix still owed before another contributor or CI can build this 
 - `docker/vendor/`'s tarball-vendoring is a stopgap; a private registry (GitHub Packages is the
   natural fit) with build-time auth is still owed before this image is reproducible by anyone but
   this machine.
+
+**M5 update (2026-09-18, n=30, `docs/eval-m5-agent-slow-path.md`):** the larger sample landed. Raw
+validation pass dropped to 86.7% below the 90% target, but all 4 misses were the same external
+`PrimeAgentTimeout` at the old 150s ceiling, not a capability failure — a retest at higher timeout
+completed all 4 in 48-65s, so `agent/prime_adapter.py`'s `DEFAULT_TIMEOUT_S` was raised 150s→210s on
+that evidence. Timeout-adjusted: 100% validation pass, 96.4% classification agreement. This is the
+early-warning mechanism (docs/11-risks.md R4) working exactly as this ADR's risk framing intended,
+not a sign the core embedding decision was wrong.

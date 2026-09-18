@@ -130,6 +130,7 @@ Full milestone detail with task breakdowns: [docs/12-roadmap.md](docs/12-roadmap
 | [docs/10-cost-model.md](docs/10-cost-model.md) | Local dev cost, LLM spend model, cloud BOM (idle vs production), guardrails |
 | [docs/11-risks.md](docs/11-risks.md) | Risk register with mitigations |
 | [docs/12-roadmap.md](docs/12-roadmap.md) | Detailed milestone task breakdowns |
+| [docs/13-architecture-diagrams.md](docs/13-architecture-diagrams.md) | C4 context + container diagrams, sequence diagrams (real incident flow, replay-mode flow) |
 | [docs/deployment/aws-deployment-guide.md](docs/deployment/aws-deployment-guide.md) | ECS Fargate + SQS + EFS runbook (aligned with existing Terraform PDF) |
 | [docs/deployment/gcp-deployment-guide.md](docs/deployment/gcp-deployment-guide.md) | Cloud Run + Pub/Sub + Filestore runbook |
 | [docs/deployment/azure-deployment-guide.md](docs/deployment/azure-deployment-guide.md) | Container Apps + Service Bus + Azure Files runbook |

@@ -436,7 +436,27 @@ the sustained-load number, since that's the actual production duty cycle, not th
       `docker compose up` brings all three up in the correct order, `GET /api/v1/incidents`
       serves real replayed records, and the evidence viewer (`GET .../evidence/tracks`) round-trips
       the staged `tracks.jsonl`. `make replay-up`/`make replay-down` added.
-- [ ] README narrative, ADR finalization, demo GIF/video, architecture diagrams (C4 + sequence)
+- [x] README narrative, ADR finalization, architecture diagrams (C4 + sequence) -- done 2026-09-18.
+      README status/results sections brought current with the replay-mode work; ADR-001 (dropped
+      the stale "planning phase" date placeholder, added a real implementation note), ADR-003
+      (corrected two wrong claims -- TensorRT FP16 said "from M2," actually landed M5; forklift
+      fine-tune said "deferred to M5," actually never landed there either -- both already correctly
+      described elsewhere, just not here), and ADR-005 (added the M5 eval outcome) all updated to
+      match reality. New `docs/13-architecture-diagrams.md`: C4 context + container diagrams, plus
+      sequence diagrams for both the real incident flow and the replay-mode flow. **A real,
+      previously-undisclosed gap found while drawing the container diagram, not by inspection:**
+      `docker-compose.yml`'s vision-\* services never mounted the `agent_workspace` volume the
+      agent service reads evidence from, and `pipelines/vision/pipeline.py` had no
+      `--evidence-root` flag at all -- `EvidenceCapture()` defaulted to a bare relative
+      `incidents/` path under whatever the container's own CWD was, never actually shared with the
+      agent container. The M4 smoke test never caught this because it injects a synthetic
+      `TriggerEvent` directly into Redis, bypassing the vision pipeline's evidence-writing step
+      entirely -- meaning the full multi-container vision-to-agent evidence handoff had never
+      actually been exercised end-to-end before this. Fixed for real: added the `--evidence-root`
+      arg (env-var default `EVIDENCE_ROOT`), wired `agent_workspace:/workspace` into the
+      `vision-volumes` anchor, and pointed both services at the same
+      `/workspace/incidents` path. Demo GIF/video remains open -- no screen-capture tooling
+      available in this working session; left as a manual follow-up.
 - [ ] Helm chart explicitly descoped (stretch only, not part of M6 exit)
 **Exit:** S5 met; public demo $0/mo; portfolio package complete.
 

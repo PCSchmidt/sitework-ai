@@ -66,6 +66,16 @@ positions pushed over WS), which stays unwired -- the dashboard's live incident 
 queue, and evidence viewer (clip playback + tracks.jsonl) are real and verified, but there is no
 live video/canvas view yet.
 
+**Third gap, found and fixed 2026-09-18 while drawing `docs/13-architecture-diagrams.md`'s
+container diagram, not disclosed until now because it wasn't known until then:** the vision-to-agent
+evidence handoff (`pipelines/vision/evidence.py` → `agent/worker.py`'s `--evidence-root`) had never
+actually been wired for real multi-container operation -- `docker-compose.yml`'s vision-\* services
+didn't mount the `agent_workspace` volume, and `pipeline.py` had no `--evidence-root` flag,
+so `EvidenceCapture()` silently wrote to an unshared directory inside each vision container. The M4
+smoke test never caught this because it injects a `TriggerEvent` directly into Redis, bypassing
+vision's evidence-writing step. Fixed for real (both the code and the compose wiring); see
+docs/12-roadmap.md's M6 entry for the full account.
+
 ## 2. Component Responsibilities
 
 | Component | Container | Key tech | owns |
