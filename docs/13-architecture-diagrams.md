@@ -85,34 +85,34 @@ first-class outcome, not an error case.
 
 ```mermaid
 sequenceDiagram
-    participant V as "vision-* (fast path)"
-    participant R as "Redis (trigger_events)"
-    participant W as agent/worker.py
-    participant PA as "prime-agent (RPC)"
-    participant B3 as agent/band3.py
+    participant V as vision fast path
+    participant R as Redis
+    participant W as worker.py
+    participant PA as prime-agent RPC
+    participant B3 as band3.py
     participant PG as Postgres
     participant API as api/main.py
     participant UI as React dashboard
 
-    V->>R: XADD TriggerEvent (rule fired, e.g. proximity < 1.0m)
-    W->>R: XREADGROUP (consumer group, crash-safe)
-    W->>W: write event.json + tracks.jsonl to incident dir
-    W->>PA: prompt() -- trajectory/classification verification
-    Note over W,PA: external wall-clock timeout+kill (210s)<br>-- the --autonomous-max-turns flag alone<br>did NOT stop a runaway task (spike-01 Finding 4)
-    PA-->>W: result.json (KinematicsVerdict)
-    W->>B3: check(event, verdict, tracks.jsonl)
+    V->>R: trigger event, e.g. proximity under 1.0m
+    W->>R: read from consumer group
+    W->>W: write event and tracks files to incident dir
+    W->>PA: prompt for trajectory or classification verification
+    Note over W,PA: external wall-clock timeout and kill enforced here.<br>the autonomous-max-turns flag alone did not stop<br>a runaway task, per spike-01 finding 4.
+    PA-->>W: verified kinematics result
+    W->>B3: check event, verdict, and tracks
     alt Band-3 passes
-        B3-->>W: passed=true
-        W->>PG: upsert_incident(state=confirmed) + agent_run
-    else Band-3 mismatch (or timeout / bad schema)
-        B3-->>W: passed=false, reasons=[...]
-        W->>PG: upsert_incident(state=needs_review, rejection_reason)
-        Note over PG: raw evidence retained either way -- never dropped
+        B3-->>W: passed
+        W->>PG: upsert incident, state confirmed
+    else Band-3 mismatch, timeout, or bad schema
+        B3-->>W: rejected, with reasons
+        W->>PG: upsert incident, state needs review
+        Note over PG: raw evidence retained either way, never dropped
     end
-    PG->>API: NOTIFY (trigger on incidents table)
-    API->>UI: WS push (incident.created / incident.updated)
-    UI->>API: GET /api/v1/incidents/{id}/evidence/tracks|clip
-    Note over UI: operator can accept/reject/re-queue<br>from the needs_review queue
+    PG->>API: notify
+    API->>UI: push incident created or updated
+    UI->>API: fetch incident evidence
+    Note over UI: operator can accept, reject, or re-queue<br>from the needs-review queue
 ```
 
 ## Sequence — replay mode ($0 public demo, M6)
@@ -122,24 +122,26 @@ call anywhere in the loop.
 
 ```mermaid
 sequenceDiagram
-    participant F as "evaluation/fixtures/incidents/* (30 hand-labeled M5 fixtures)"
-    participant RP as scripts/replay_demo.py
+    participant Fixtures as M5 fixture set
+    participant RP as replay_demo.py
     participant PG as Postgres
     participant API as api/main.py
     participant UI as React dashboard
 
-    loop every --interval-s (default 8s), cycling through fixtures
-        RP->>F: load event.json + tracks.jsonl + expected.json
-        RP->>RP: stage_evidence() -- copy tracks.jsonl to workspace/incidents/{replay_id}/
-        alt proximity fixture (2 involved tracks)
-            RP->>RP: agent.band3.recompute_kinematics(tracks) -- real recomputation,<br>same math the Band-3 gate itself uses
+    loop every interval, cycling through fixtures
+        RP->>Fixtures: load event, tracks, expected labels
+        RP->>RP: stage evidence into workspace
+        alt proximity fixture, two involved tracks
+            RP->>RP: recompute kinematics from tracks
+            Note right of RP: real recomputation, same math<br>the Band-3 gate itself uses
         end
-        RP->>RP: build_record() -- classification/state from expected.json<br>(the fixture's own hand-labeled ground truth);<br>narrative_md tagged [REPLAY DEMO];<br>agent_run = 0 tokens, model="replay-mode (no LLM call)"
-        RP->>PG: upsert_incident() (same repository.py call a real incident uses)
+        RP->>RP: build incident record
+        Note right of RP: classification and state come from<br>the fixture's own hand-labeled ground truth.<br>narrative is tagged as a replay demo.<br>agent run cost is recorded as zero tokens.
+        RP->>PG: upsert incident
     end
-    PG->>API: NOTIFY
-    API->>UI: WS push (incident.created)
-    UI->>API: GET /api/v1/incidents/{id}/evidence/tracks
+    PG->>API: notify
+    API->>UI: push incident created
+    UI->>API: fetch incident evidence
 ```
 
 ## What these diagrams deliberately don't show
