@@ -159,7 +159,16 @@ def test_evidence_clip_404_when_missing(client: TestClient, tmp_path: Path, monk
 
 async def test_shift_report_renders_html(client: TestClient, pg_pool) -> None:
     await repository.upsert_incident(pg_pool, _record("evt_shift"))
-    resp = client.get("/api/v1/shift-report", params={"from_ts": 0, "to_ts": 1e12})
+    resp = client.get("/api/v1/shift-report", params={"from_ts": 0, "to_ts": 2_000_000_000})
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
     assert "evt_shift" in resp.text
+
+
+def test_shift_report_out_of_range_timestamp_does_not_500(client: TestClient) -> None:
+    # 1e12 seconds since epoch is year 33658 -- datetime.fromtimestamp can't
+    # represent it. A bad/typo'd query param should render a clean placeholder,
+    # not crash the endpoint (real bug: this used to be an unhandled 500).
+    resp = client.get("/api/v1/shift-report", params={"from_ts": 0, "to_ts": 1e12})
+    assert resp.status_code == 200
+    assert "out of range" in resp.text

@@ -44,7 +44,16 @@ _STYLE = """
 
 
 def _fmt_ts(ts: float) -> str:
-    return datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
+    # from_ts/to_ts are caller-supplied query params (api/main.py's shift_report
+    # route) with no range validation -- a huge value (e.g. a typo'd extra digit)
+    # would otherwise crash datetime.fromtimestamp with an unhandled 500 instead
+    # of just rendering an out-of-range placeholder. Real bug caught by CI's
+    # integration test (tests/test_api.py), not by local runs -- this repo's own
+    # dev environment never had a reachable Postgres to run that test against.
+    try:
+        return datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
+    except (ValueError, OverflowError, OSError):
+        return f"(out of range: {ts})"
 
 
 def render_shift_report_html(
