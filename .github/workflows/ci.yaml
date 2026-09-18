@@ -54,17 +54,21 @@ jobs:
         working-directory: ui
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      # npm, not pnpm: docker/docker-compose.yml's ui service (the actual,
+      # verified dev stack) runs `npm install && npm run dev` -- pnpm was an
+      # M0 scaffold choice nothing else in the repo ever adopted, and its
+      # pnpm-workspace.yaml was a broken placeholder (no `packages:` field)
+      # that failed `pnpm install` on every CI run since M0. Removed rather
+      # than fixed, since fixing it would just maintain a second, unused
+      # package-manager story alongside the one actually in use.
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
-          cache-dependency-path: ui/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile || pnpm install
-      - run: pnpm test
-      - run: pnpm build
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
 
   compose:
     runs-on: ubuntu-latest

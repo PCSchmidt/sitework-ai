@@ -119,7 +119,12 @@ def main() -> None:
 
     print(
         json.dumps(
-            {"triage_latency_s": agent_end_at, "elapsed_s": elapsed, "stats": stats, "final_text": final_text},
+            {
+                "triage_latency_s": agent_end_at,
+                "elapsed_s": elapsed,
+                "stats": stats,
+                "final_text": final_text,
+            },
             indent=2,
         )
     )
