@@ -1,0 +1,314 @@
+{
+  "summary": {
+    "n": 30,
+    "validation_pass_rate": 0.8666666666666667,
+    "validation_pass": 26,
+    "classification_agreement_rate": 0.8214285714285714,
+    "classification_agree": 23,
+    "classification_checked": 28,
+    "p50_wall_s": 68.79700000002049,
+    "max_wall_s": 150.04699999996228
+  },
+  "outcomes": [
+    {
+      "event_id": "evt_seed_evidence_inconsistent_01",
+      "expected_state": "needs_review",
+      "actual_state": "needs_review",
+      "expected_classification": null,
+      "actual_classification": "normal_ops",
+      "check_classification": false,
+      "rejection_reason": "Band-3 recomputation mismatch: TriggerEvent.metrics.min_distance_m=1.0 vs recomputed 2.600m (tol 0.15m / 5%)",
+      "wall_s": 56.93699999997625
+    },
+    {
+      "event_id": "evt_seed_evidence_inconsistent_02",
+      "expected_state": "needs_review",
+      "actual_state": "needs_review",
+      "expected_classification": null,
+      "actual_classification": "normal_ops",
+      "check_classification": false,
+      "rejection_reason": "Band-3 recomputation mismatch: TriggerEvent.metrics.min_distance_m=0.5 vs recomputed 2.700m (tol 0.15m / 5%)",
+      "wall_s": 56.93800000002375
+    },
+    {
+      "event_id": "evt_seed_minimal_window_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 55.26500000001397
+    },
+    {
+      "event_id": "evt_seed_near_miss_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 71.57799999997951
+    },
+    {
+      "event_id": "evt_seed_near_miss_approaching_stationary_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 80.07799999997951
+    },
+    {
+      "event_id": "evt_seed_near_miss_boundary_close_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 54.18800000002375
+    },
+    {
+      "event_id": "evt_seed_near_miss_boundary_far_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 59.95299999997951
+    },
+    {
+      "event_id": "evt_seed_near_miss_long_dwell_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 68.79700000002049
+    },
+    {
+      "event_id": "evt_seed_normal_ops_01",
+      "expected_state": "confirmed",
+      "actual_state": "needs_review",
+      "expected_classification": "normal_ops",
+      "actual_classification": null,
+      "check_classification": true,
+      "rejection_reason": "prime-agent did not complete within 150.0s (external supervisory timeout -- spike-01 Finding 4: autonomous-max-turns alone is not enough)",
+      "wall_s": 150.03100000001723
+    },
+    {
+      "event_id": "evt_seed_normal_ops_boundary_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "normal_ops",
+      "actual_classification": "normal_ops",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 38.90599999995902
+    },
+    {
+      "event_id": "evt_seed_normal_ops_moving_apart_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "normal_ops",
+      "actual_classification": "normal_ops",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 46.0
+    },
+    {
+      "event_id": "evt_seed_proximity_minimal_violation_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 111.36000000004424
+    },
+    {
+      "event_id": "evt_seed_proximity_multi_person_01",
+      "expected_state": "confirmed",
+      "actual_state": "needs_review",
+      "expected_classification": "violation",
+      "actual_classification": null,
+      "check_classification": true,
+      "rejection_reason": "prime-agent did not complete within 150.0s (external supervisory timeout -- spike-01 Finding 4: autonomous-max-turns alone is not enough)",
+      "wall_s": 150.04699999996228
+    },
+    {
+      "event_id": "evt_seed_proximity_multi_vehicle_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 42.25
+    },
+    {
+      "event_id": "evt_seed_speed_false_positive_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "false_positive",
+      "actual_classification": "false_positive",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 76.67200000002049
+    },
+    {
+      "event_id": "evt_seed_speed_false_positive_fluctuating_01",
+      "expected_state": "confirmed",
+      "actual_state": "needs_review",
+      "expected_classification": "false_positive",
+      "actual_classification": null,
+      "check_classification": true,
+      "rejection_reason": "prime-agent did not complete within 150.0s (external supervisory timeout -- spike-01 Finding 4: autonomous-max-turns alone is not enough)",
+      "wall_s": 150.045999999973
+    },
+    {
+      "event_id": "evt_seed_speed_violation_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 82.21900000004098
+    },
+    {
+      "event_id": "evt_seed_speed_violation_accelerating_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 96.46899999998277
+    },
+    {
+      "event_id": "evt_seed_speed_violation_edge_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 89.96799999999348
+    },
+    {
+      "event_id": "evt_seed_speed_violation_severe_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 56.68800000002375
+    },
+    {
+      "event_id": "evt_seed_ttc_closing_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "near_miss",
+      "actual_classification": "near_miss",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 82.18699999997625
+    },
+    {
+      "event_id": "evt_seed_violation_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 94.95299999997951
+    },
+    {
+      "event_id": "evt_seed_violation_boundary_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 63.54700000002049
+    },
+    {
+      "event_id": "evt_seed_violation_severe_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 50.45299999997951
+    },
+    {
+      "event_id": "evt_seed_zone_false_positive_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "false_positive",
+      "actual_classification": "false_positive",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 43.67200000002049
+    },
+    {
+      "event_id": "evt_seed_zone_false_positive_brief_01",
+      "expected_state": "confirmed",
+      "actual_state": "needs_review",
+      "expected_classification": "false_positive",
+      "actual_classification": null,
+      "check_classification": true,
+      "rejection_reason": "prime-agent did not complete within 150.0s (external supervisory timeout -- spike-01 Finding 4: autonomous-max-turns alone is not enough)",
+      "wall_s": 150.03100000001723
+    },
+    {
+      "event_id": "evt_seed_zone_false_positive_reentry_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "false_positive",
+      "actual_classification": "false_positive",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 70.17199999996228
+    },
+    {
+      "event_id": "evt_seed_zone_violation_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 40.35899999999674
+    },
+    {
+      "event_id": "evt_seed_zone_violation_edge_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 53.04700000002049
+    },
+    {
+      "event_id": "evt_seed_zone_violation_long_01",
+      "expected_state": "confirmed",
+      "actual_state": "confirmed",
+      "expected_classification": "violation",
+      "actual_classification": "violation",
+      "check_classification": true,
+      "rejection_reason": null,
+      "wall_s": 38.35899999999674
+    }
+  ]
+}

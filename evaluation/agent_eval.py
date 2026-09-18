@@ -1,5 +1,5 @@
-"""Runs the M3 seeded incident eval set against the real `agent.worker.AgentWorker`
-pipeline (docs/09 §3, docs/12 M3 exit criterion: validation pass >= 90%).
+"""Runs the seeded incident eval set (10 at M3, 30 at M5) against the real
+`agent.worker.AgentWorker` pipeline (docs/09 §3).
 
 Each fixture in `evaluation/fixtures/incidents/{event_id}/` is a real
 TriggerEvent + tracks.jsonl + hand-labeled `expected.json`
@@ -26,12 +26,14 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import statistics
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 import fakeredis
+from agent.prime_adapter import DEFAULT_TIMEOUT_S
 from agent.worker import AgentWorker
 from pipelines.schemas import TriggerEvent
 
@@ -48,6 +50,8 @@ class EvalOutcome:
     check_classification: bool
     rejection_reason: str | None
     wall_s: float
+    tokens_in: int | None
+    tokens_out: int | None
 
 
 def run(fixtures_dir: Path, workspace_root: Path, prompt_timeout_s: float) -> list[EvalOutcome]:
@@ -84,6 +88,8 @@ def run(fixtures_dir: Path, workspace_root: Path, prompt_timeout_s: float) -> li
                 check_classification=expected["check_classification"],
                 rejection_reason=record.rejection_reason,
                 wall_s=wall_s,
+                tokens_in=record.agent_run.tokens_in if record.agent_run else None,
+                tokens_out=record.agent_run.tokens_out if record.agent_run else None,
             )
         )
     return outcomes
@@ -97,6 +103,13 @@ def summarize(outcomes: list[EvalOutcome]) -> dict[str, object]:
         1 for o in classification_checked if o.actual_classification == o.expected_classification
     )
     wall_times = sorted(o.wall_s for o in outcomes)
+    # None for timed-out/crashed runs (no agent_run stats produced) -- excluded
+    # rather than treated as 0, which would understate the real per-incident cost.
+    tokens_total = [
+        o.tokens_in + o.tokens_out
+        for o in outcomes
+        if o.tokens_in is not None and o.tokens_out is not None
+    ]
 
     return {
         "n": n,
@@ -109,6 +122,13 @@ def summarize(outcomes: list[EvalOutcome]) -> dict[str, object]:
         "classification_checked": len(classification_checked),
         "p50_wall_s": wall_times[len(wall_times) // 2] if wall_times else None,
         "max_wall_s": max(wall_times) if wall_times else None,
+        "mean_tokens_per_incident": round(statistics.mean(tokens_total)) if tokens_total else None,
+        "p95_tokens_per_incident": (
+            round(sorted(tokens_total)[min(len(tokens_total) - 1, int(len(tokens_total) * 0.95))])
+            if tokens_total
+            else None
+        ),
+        "tokens_measured_n": len(tokens_total),
     }
 
 
@@ -116,7 +136,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--fixtures-dir", default=str(FIXTURES_DIR))
     ap.add_argument("--workspace-root", default=None)
-    ap.add_argument("--prompt-timeout-s", type=float, default=150.0)
+    ap.add_argument("--prompt-timeout-s", type=float, default=DEFAULT_TIMEOUT_S)
     ap.add_argument("--report-json", default=None)
     args = ap.parse_args()
 

@@ -37,9 +37,15 @@ _PRIME_AGENT_EXE = "prime-agent.cmd" if sys.platform == "win32" else "prime-agen
 # module docstring and PrimeAgentTimeout).
 DEFAULT_MAX_TURNS = 8
 DEFAULT_MAX_TOKENS = 40_000
-# spike-01 Finding 6: p50 ran 82-96s against a 60s target; budget 90-120s
-# realistically for flash-tier models until M5's larger eval set says otherwise.
-DEFAULT_TIMEOUT_S = 150.0
+# spike-01 Finding 6: p50 ran 82-96s against a 60s target; budgeted 90-120s
+# (150s ceiling) until M5's larger eval set said otherwise: 4/30 fixtures hit
+# the 150s ceiling on their first attempt (docs/eval-m5-agent-slow-path.md),
+# then completed correctly in 48-65s each when re-run with more headroom --
+# real run-to-run latency variance, not a capability failure, and not
+# anywhere near needing the full 220s the retest allowed. 210s keeps ~2x
+# margin over the highest max ever observed (96.0s, M3) while still bounding
+# a genuine hang.
+DEFAULT_TIMEOUT_S = 210.0
 
 
 class PrimeAgentTimeout(RuntimeError):

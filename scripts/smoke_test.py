@@ -28,6 +28,7 @@ from pathlib import Path
 
 import redis
 from agent.persistence import PostgresPersister
+from agent.prime_adapter import DEFAULT_TIMEOUT_S
 from agent.worker import AgentWorker
 from pipelines.broker.streams import TRIGGER_STREAM_KEY
 from pipelines.schemas import (
@@ -183,7 +184,7 @@ async def _run(args: argparse.Namespace, event_id: str) -> None:
             workspace_root=tmp_path / "workspace",
             evidence_root=evidence_root,
             consumer_name="smoke-test",
-            prompt_timeout_s=150,
+            prompt_timeout_s=DEFAULT_TIMEOUT_S,
             persister=PostgresPersister(dsn=args.postgres_dsn),
         )
         entries = worker.reader.read(count=10, block_ms=5000)

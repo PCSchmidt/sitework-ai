@@ -22,7 +22,7 @@ import json
 import shutil
 from pathlib import Path
 
-from agent.prime_adapter import PrimeAdapter
+from agent.prime_adapter import DEFAULT_TIMEOUT_S, PrimeAdapter
 from agent.worker import build_prompt
 from pipelines.schemas import TriggerEvent
 
@@ -43,7 +43,7 @@ def main() -> None:
 
     prompt = build_prompt(event)
     with PrimeAdapter(cwd=work_dir) as adapter:
-        result = adapter.prompt(prompt, timeout_s=150)
+        result = adapter.prompt(prompt, timeout_s=DEFAULT_TIMEOUT_S)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     events_path = OUT_DIR / "golden_prime_agent_session.jsonl"
