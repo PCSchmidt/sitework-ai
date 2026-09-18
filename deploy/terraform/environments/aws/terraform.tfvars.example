@@ -7,9 +7,14 @@ environment  = "reference"
 project_name = "sitewatch-ai"
 
 # Required -- no defaults, these are account-specific.
-vpc_id              = "vpc-REPLACE_ME"
-private_subnet_ids  = ["subnet-REPLACE_ME_A", "subnet-REPLACE_ME_B"]
-agent_image_uri     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/sitewatch-agent:latest"
+vpc_id             = "vpc-REPLACE_ME"
+private_subnet_ids = ["subnet-REPLACE_ME_A", "subnet-REPLACE_ME_B"]
+agent_image_uri    = "123456789012.dkr.ecr.us-east-1.amazonaws.com/sitewatch-ai/agent-worker:1.0.0"
 
-# cpu   = 1024  # 1 vCPU
+# cpu    = 1024 # 1 vCPU
 # memory = 2048 # 2 GB
+
+# db_master_username stays at its default; set db_master_password via
+# TF_VAR_db_master_password (env var) or a real secrets backend -- never in
+# a committed tfvars file.
+# db_master_password = "REPLACE_ME"

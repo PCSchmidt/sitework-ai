@@ -2,9 +2,13 @@
 
 **Deployable reference architecture.** This runbook documents a complete, syntactically valid
 deployment. Per ADR-004, `terraform apply` is never executed in CI; every provisioning step ends
-with `plan` only. The canonical Terraform for this guide exists as a reviewed specification:
-*SiteWatch AI — AWS ECS Fargate & EFS Terraform Configuration* (repo root PDF), covering
-`variables.tf`, `sqs.tf`, `efs.tf`, `security_iam.tf`, `main.tf`, `outputs.tf`.
+with `plan` only. The Terraform lives at `deploy/terraform/environments/aws/`, realized from
+*SiteWatch AI — AWS ECS Fargate & EFS Terraform Configuration* (repo root PDF) as
+`variables.tf`, `sqs.tf`, `efs.tf`, `security_iam.tf`, `main.tf`, `outputs.tf`, plus `db.tf` (M6
+addition -- the PDF spec covered only the agent worker's own ECS/SQS/EFS topology, not the
+delivery-plane database the architecture table below already promised; `db.tf` closes that gap
+with a real Aurora Serverless v2 cluster). `terraform fmt -check` + `terraform validate` pass for
+real (verified against a locally-installed terraform, matching `iac-check.yaml`'s CI steps).
 
 ## 1. Architecture Mapping
 
@@ -20,11 +24,13 @@ with `plan` only. The canonical Terraform for this guide exists as a reviewed sp
 
 Key spec invariants (from the PDF, mirrored in `deploy/terraform/environments/aws/`):
 - Task role grants only `sqs:ReceiveMessage/DeleteMessage/GetQueueAttributes/ChangeMessageVisibility`
-  on the incident queue (least privilege).
-- Egress restricted to HTTPS 443 (LLM APIs, AWS services) and NFS 2049 (EFS). Private subnets,
-  no public IP.
+  on the incident queue, and `s3:GetObject/PutObject` scoped to the clips bucket (least privilege).
+- Egress restricted to HTTPS 443 (LLM APIs, AWS services), NFS 2049 (EFS), and Postgres 5432
+  (Aurora, `db.tf`). Private subnets, no public IP.
 - EFS Access Point enforces POSIX `uid/gid 1000`; transit encryption enabled; IA lifecycle at 30 days.
 - Queue `visibility_timeout_seconds=300` > max agent turn timeout; redrive `maxReceiveCount=3`.
+- Aurora Serverless v2 scales 0.5-2.0 ACU (`db.tf`) -- toward-$0 idle floor, matching
+  docs/10-cost-model.md's Scenario A row.
 
 ## 2. Prerequisites
 
@@ -40,20 +46,26 @@ aws configure            # admin-equivalent credentials for the deployment accou
 ```bash
 cd deploy/terraform/environments/aws
 cp terraform.tfvars.example terraform.tfvars   # set vpc_id, private_subnet_ids, agent_image_uri
+export TF_VAR_db_master_password="$(openssl rand -base64 24)"   # never in the tfvars file
 terraform init
-terraform plan -out=tfplan                      # review: queue, DLQ, EFS, roles, Fargate service
-# COST WARNING: applying provisions an always-on Fargate task + EFS (~$10-15/mo idle floor).
+terraform plan -out=tfplan                      # review: queue, DLQ, EFS, S3, Aurora, roles, Fargate service
+# COST WARNING: applying provisions an always-on Fargate task + EFS + Aurora Serverless v2
+# (~$10-15/mo idle floor for compute/storage; Aurora's 0.5 ACU floor adds ~$45-50/mo more).
 # terraform apply tfplan                        # commented per ADR-004 — deliberate manual action only
 ```
 
 ## 4. Container Image Publication
 
 ```bash
-aws ecr create-repository --repository-name sitewatch-ai/prime-agent-worker
+# "agent-worker", not "prime-agent-worker" -- prime-agent is the vendored CLI
+# this container runs (docker/vendor/README.md), not this repo's own image name;
+# matches the ECS container name in deploy/terraform/environments/aws/main.tf.
+aws ecr create-repository --repository-name sitewatch-ai/agent-worker
 aws ecr get-login-password | docker login --username AWS --password-stdin <acct>.dkr.ecr.<region>.amazonaws.com
-docker build -f docker/Dockerfile.agent -t sitewatch-ai/prime-agent-worker:1.0.0 .   # pinned prime-agent version
-docker tag sitewatch-ai/prime-agent-worker:1.0.0 <acct>.dkr.ecr.<region>.amazonaws.com/sitewatch-ai/prime-agent-worker:1.0.0
-docker push <acct>.dkr.ecr.<region>.amazonaws.com/sitewatch-ai/prime-agent-worker:1.0.0
+docker build -f docker/Dockerfile.agent -t sitewatch-ai/agent-worker:1.0.0 .   # pinned prime-agent version inside
+docker tag sitewatch-ai/agent-worker:1.0.0 <acct>.dkr.ecr.<region>.amazonaws.com/sitewatch-ai/agent-worker:1.0.0
+docker push <acct>.dkr.ecr.<region>.amazonaws.com/sitewatch-ai/agent-worker:1.0.0
+# Set agent_image_uri in terraform.tfvars to the pushed URI above.
 ```
 
 ## 5. Secrets & Identity
@@ -69,11 +81,31 @@ non-persistent experiment; no NAT gateway (use interface VPC endpoints for SQS/E
 
 ## 6. Smoke Test
 
+**Honest gap:** `scripts/smoke_test.py` (docs/09 §6, M4 exit criterion S1) is real, tested, and
+green -- but it drives the local docker-compose stack (Redis Streams + Postgres), not SQS +
+Aurora. No cloud-native equivalent exists yet; the steps below are the manual verification a real
+AWS deployment would need, not an automated script this repo ships.
+
 ```bash
-QUEUE_URL=$(aws sqs get-queue-url --queue-name sitewatch-ai-incident-queue-production --query QueueUrl --output text)
-python scripts/smoke_test_telemetry.py --queue "$QUEUE_URL"   # injects one synthetic TriggerEvent
-# EXPECT: worker logs show RPC session; result.json validated; incident row in Aurora;
-#         DLQ depth remains 0; agent_runs row created with token accounting.
+# Queue name follows ${project_name}-incident-queue-${environment} (main.tf/sqs.tf);
+# "reference" is terraform.tfvars.example's default -- substitute your actual environment.
+QUEUE_URL=$(aws sqs get-queue-url --queue-name sitewatch-ai-incident-queue-reference --query QueueUrl --output text)
+
+# Inject one synthetic TriggerEvent (pipelines/schemas/models.py's shape) by hand:
+aws sqs send-message --queue-url "$QUEUE_URL" --message-body "$(uv run python -c '
+from pipelines.schemas import TriggerEvent, Severity, TriggerMetrics, CalibrationQuality
+print(TriggerEvent(
+    event_id="evt_aws_smoke", trigger_ts=1000.0, camera_id="dock_north_01",
+    rule_id="proximity_forklift_pedestrian", severity_hint=Severity.HIGH,
+    metrics=TriggerMetrics(min_distance_m=1.2, duration_s=2.0, closing_speed_mps=1.8),
+    involved_track_ids=[42, 77], track_window_ref="incidents/evt_aws_smoke/tracks.jsonl",
+    cooldown_key="dock_north_01:proximity:evt_aws_smoke",
+    calibration_quality=CalibrationQuality(rms_px=1.0, valid=True),
+).model_dump_json())')"
+
+# EXPECT (CloudWatch Logs, /ecs/sitewatch-ai-worker-reference): RPC session starts, result.json
+# validated, incident row appears in Aurora, DLQ depth stays 0, agent_runs row created with token
+# accounting -- same pass criteria scripts/smoke_test.py checks locally, verified by hand here.
 aws sqs get-queue-attributes --queue-url "$QUEUE_URL" --attribute-names ApproximateNumberOfMessages
 ```
 

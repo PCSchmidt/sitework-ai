@@ -48,3 +48,15 @@ variable "memory" {
   default     = 2048
   description = "Fargate memory limit in MiB (2048 = 2 GB)."
 }
+
+variable "db_master_username" {
+  type        = string
+  default     = "sitewatch_admin"
+  description = "Master username for the Aurora Serverless v2 cluster."
+}
+
+variable "db_master_password" {
+  type        = string
+  sensitive   = true
+  description = "Master password for the Aurora Serverless v2 cluster -- set via TF_VAR_db_master_password or a real secrets backend, never committed."
+}

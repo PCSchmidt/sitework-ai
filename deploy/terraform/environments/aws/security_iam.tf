@@ -90,3 +90,29 @@ resource "aws_iam_role_policy_attachment" "agent_sqs_attach" {
   role       = aws_iam_role.ecs_task_role.name
   policy_arn = aws_iam_policy.agent_sqs_policy.arn
 }
+
+# S3 read/write for evidence clips (agent/worker.py copies clip.mp4 into the
+# incident workspace; a real deployment would also push it to S3 from there).
+resource "aws_iam_policy" "agent_s3_policy" {
+  name        = "${var.project_name}-agent-s3-policy-${var.environment}"
+  description = "Allows the agent worker to read/write incident evidence clips"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+        ]
+        Resource = "${aws_s3_bucket.incident_clips.arn}/*"
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "agent_s3_attach" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = aws_iam_policy.agent_s3_policy.arn
+}

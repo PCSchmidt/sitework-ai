@@ -154,9 +154,13 @@ az acr create --name sitewatchaiacr --resource-group rg-sitewatch-ai \
   --sku Standard --admin-enabled false   # use managed identity for pulls
 az acr login --name sitewatchaiacr
 
-docker build -t ${ACR}/sitewatch-ai/worker:0.1.0 ./services/reasoning-worker   # Prime Agent slow path
+# Both Dockerfiles build from the repo root (docker/docker-compose.yml's own
+# `context: ..`), not a services/ subdirectory -- this guide previously
+# referenced ./services/reasoning-worker and ./services/backend, neither of
+# which exists in this repo.
+docker build -f docker/Dockerfile.agent -t ${ACR}/sitewatch-ai/worker:0.1.0 .   # agent slow-path worker
 docker push ${ACR}/sitewatch-ai/worker:0.1.0
-docker build -t ${ACR}/sitewatch-ai/backend:0.1.0 ./services/backend           # FastAPI delivery plane
+docker build -f docker/Dockerfile.web -t ${ACR}/sitewatch-ai/backend:0.1.0 .    # FastAPI delivery plane
 docker push ${ACR}/sitewatch-ai/backend:0.1.0
 ```
 

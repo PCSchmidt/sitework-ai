@@ -57,13 +57,30 @@ Scenario A — Staging/idle (scale-to-zero):
 | Agent compute | Fargate 0.5 task, on-demand ~$0.05/h while processing | Cloud Run scale-to-zero | Container Apps scale-to-zero |
 | Broker | SQS (per-request) | Pub/Sub | Service Bus basic |
 | Storage | EFS + S3 (GBs) | Filestore + GCS | Azure Files + Blob |
-| DB | Aurora Serverless v2 (paused) | Cloud SQL Serverless | PG Flexible (burst) |
-| **Idle/mo** | **~$5–15** (EFS+storage floor) | **~$5–10** (see Filestore note) | **~$5–15** |
+| DB | Aurora Serverless v2, 0.5 ACU floor | Cloud SQL, smallest custom tier | PG Flexible, B1ms burstable |
+| **Idle/mo** | **~$50–65** (Aurora floor + EFS/S3) | **~$55–75** (Cloud SQL floor; excl. Filestore) | **~$20–40** (PG Flexible + Files) |
+
+> **DB idle floor correction (M6, realizing the Terraform surfaced this):** this row previously
+> said "Aurora Serverless v2 (paused)" / "Cloud SQL Serverless" -- both wrong. Aurora Serverless
+> **v1** could auto-pause to ~$0; **v2** (what `deploy/terraform/environments/aws/db.tf` actually
+> provisions, since v1 doesn't support PostgreSQL in most regions) has no pause capability, only a
+> minimum-ACU floor that runs continuously (~$0.12/ACU-hr, so 0.5 ACU ≈ $44/mo before storage).
+> GCP Cloud SQL has no "serverless" product at all -- only fixed/custom machine tiers that run
+> continuously; `db-custom-1-3840` (1 vCPU/3.75 GB, what `environments/gcp/main.tf` provisions) is
+> the smallest viable size, not free when idle. Azure's PostgreSQL Flexible Server Burstable tier
+> (`B_Standard_B1ms`, what `environments/azure/main.tf` provisions) is genuinely the cheapest of
+> the three -- burstable CPU credits, not scale-to-zero, but a real, small always-on floor rather
+> than a large one. None of the three clouds offers a true $0-when-idle managed Postgres; this is
+> a real constraint of "always-on relational DB," not a gap specific to one cloud. Figures above
+> are reasoned estimates from each provider's published per-unit pricing, not measured spend (no
+> environment here is ever applied, per ADR-004) -- treat them as directional, not exact.
 
 > **GCP Filestore caveat:** Filestore BASIC_HDD has a 1 TiB minimum (~$180/mo) which breaks the
 > scale-to-zero idle claim. The GCP guide documents alternatives (smallest Zonal tier, or
 > harness state on GCS via gcsfuse with cold-start resync). Until chosen, treat GCP idle as
-> ~$185–240/mo if Filestore is used as drawn, ~$5–10 otherwise.
+> ~$235–255/mo if Filestore is used as drawn (the ~$55-75/mo Cloud SQL floor above, plus
+> Filestore's ~$180/mo), ~$55–75/mo otherwise (Cloud SQL floor only, once Filestore is swapped
+> for the gcsfuse alternative).
 
 Scenario B — Production-style (10 continuous streams, edge GPU on-prem, cloud slow path):
 

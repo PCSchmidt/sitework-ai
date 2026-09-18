@@ -163,9 +163,13 @@ gcloud artifacts repositories create sitewatch-ai \
 AR_HOST=us-central1-docker.pkg.dev
 gcloud auth configure-docker ${AR_HOST}
 W=${AR_HOST}/sitewatch-ai-prod/sitewatch-ai
-docker build -t ${W}/worker:0.1.0 ./services/reasoning-worker   # Prime Agent slow path
+# Both Dockerfiles build from the repo root (docker/docker-compose.yml's own
+# `context: ..`), not a services/ subdirectory -- this guide previously
+# referenced ./services/reasoning-worker and ./services/backend, neither of
+# which exists in this repo.
+docker build -f docker/Dockerfile.agent -t ${W}/worker:0.1.0 .   # agent slow-path worker
 docker push  ${W}/worker:0.1.0
-docker build -t ${W}/backend:0.1.0 ./services/backend           # FastAPI delivery plane
+docker build -f docker/Dockerfile.web -t ${W}/backend:0.1.0 .    # FastAPI delivery plane
 docker push  ${W}/backend:0.1.0
 ```
 
