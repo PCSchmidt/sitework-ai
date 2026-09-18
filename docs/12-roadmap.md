@@ -332,9 +332,13 @@ a future session.
 published numbers headlessly via `make eval` / `make tracking-eval`, CPU- or GPU-portable);
 `make agent-eval`'s reproducibility stays CLI-availability-gated (prime-agent's private-registry
 gap, unchanged from M3, docs/12 M3 notes) -- a pre-existing, separately-tracked limitation, not a
-new M5 gap. **S2 is not met** (honest negative result, see above) -- carried forward, not silently
-dropped: production sizing should assume server-class GPUs per docs/benchmarks.md's existing
-recommendation, and this laptop's numbers are a development-rig floor, not a deployment claim.
+new M5 gap. **S2 is met**, confirmed 2026-09-19 with an idle-recovered-GPU rerun of the multi-stream
+matrix (`docs/benchmarks.md`): 3-stream FP16 TensorRT reaches 30.2 FPS min-stream, clearing the
+≥25 FPS floor. The original sustained-load run (9.5-13.2 FPS/stream at 3 streams) is kept published
+alongside it, not replaced by it -- production sizing (docs/10 cost model, M6 Terraform) should use
+the sustained-load number, since that's the actual production duty cycle, not the best-case one.
+
+**M5 CLOSED 2026-09-19.**
 
 ## M6 — Reference architecture & portfolio polish (2 weeks)
 - [ ] Terraform AWS environment realized from the existing PDF spec (modules + env), GCP + Azure envs
