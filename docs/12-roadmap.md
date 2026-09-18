@@ -341,9 +341,25 @@ the sustained-load number, since that's the actual production duty cycle, not th
 **M5 CLOSED 2026-09-19.**
 
 ## M6 — Reference architecture & portfolio polish (2 weeks)
-- [ ] Terraform AWS environment realized from the existing PDF spec (modules + env), GCP + Azure envs
-      (GCP env documents the Filestore/alternative decision from docs/10 §4)
-- [ ] `iac-check.yaml` enforcing fmt+validate; runbook review pass; cost model finalize
+- [x] Terraform AWS environment realized from the existing PDF spec (modules + env), GCP + Azure envs
+      (GCP env documents the Filestore/alternative decision from docs/10 §4) -- done 2026-09-19.
+      AWS ported from the repo-root PDF spec's own file layout
+      (variables/sqs/efs/security_iam/main/outputs.tf); GCP and Azure ported from
+      docs/deployment/{gcp,azure}-deployment-guide.md §3's inline HCL. Real bugs caught by
+      actually running `terraform validate` against real provider schemas, not by inspection:
+      GCP's push subscription referenced an undefined `google_service_account.run_invoker`
+      (added it); Azure's Service Bus namespace name ended in the reserved "-sb" suffix (renamed);
+      `azurerm_storage_share` has no `protocol` argument, the real one is `enabled_protocol`
+      (fixed, verified against the provider's own schema); PostgreSQL Flexible Server's required
+      `administrator_login`/`administrator_password` were missing from the guide's illustrative
+      snippet (added, password has no default). All three fixes landed in both the `.tf` files
+      and the source markdown guides, not just the code. `deploy/terraform/modules/README.md`
+      updated to document a real decision -- no shared cross-cloud module layer, since AWS/GCP/
+      Azure's primitives don't share Terraform resource schemas closely enough to warrant one.
+- [x] `iac-check.yaml` enforcing fmt+validate -- already existed from M0, now actually exercised
+      for real: downloaded terraform 1.9.8 locally and ran the exact fmt-check/init/validate
+      sequence the CI workflow runs, for all three environments; all green.
+- [ ] Runbook review pass; cost model finalize
 - [ ] Simulated-live replay mode (fixtures → cloud backend) for the $0 public demo
 - [ ] README narrative, ADR finalization, demo GIF/video, architecture diagrams (C4 + sequence)
 - [ ] Helm chart explicitly descoped (stretch only, not part of M6 exit)
