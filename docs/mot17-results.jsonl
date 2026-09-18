@@ -1,0 +1,3 @@
+{"sequence": "MOT17-02-FRCNN", "frames": 200, "mota": 0.1576, "idf1": 0.3214, "num_switches": 22, "num_misses": 5121, "num_false_positives": 610, "num_gt_ids": 53, "num_pred_ids": 57}
+{"sequence": "MOT17-04-FRCNN", "frames": 200, "mota": 0.2586, "idf1": 0.4584, "num_switches": 5, "num_misses": 5874, "num_false_positives": 794, "num_gt_ids": 69, "num_pred_ids": 37}
+{"sequence": "MOT17-09-FRCNN", "frames": 200, "mota": 0.4587, "idf1": 0.6117, "num_switches": 16, "num_misses": 737, "num_false_positives": 460, "num_gt_ids": 22, "num_pred_ids": 44}
