@@ -133,6 +133,10 @@ make calib                 # launch the manual camera-calibration CLI
 make agent-eval            # run the seeded incident set against the real prime-agent CLI
 make tracking-eval         # MOTA/IDF1 against the MOT17 mirror
 make eval                  # fast-path benchmark harness (single/multi-stream, FP32/FP16)
+
+make replay-up             # $0 public demo stack: postgres + api + ui + fixture replay,
+                            # no GPU/LLM call in the loop (docs/12 M6). Dashboard at :5173
+                            # populates from the 30 seeded fixtures, not live cameras.
 ```
 
 ## Approach: why it is built this way

@@ -2,13 +2,21 @@
 
 COMPOSE := docker compose -f docker/docker-compose.yml
 
-.PHONY: up down eval calib test iac report docs-check schema-export agent-eval tracking-eval
+REPLAY_COMPOSE := docker compose -f docker/docker-compose.replay.yml
+
+.PHONY: up down eval calib test iac report docs-check schema-export agent-eval tracking-eval replay-up replay-down
 
 up:        ## docker compose up --build (full stack, simulated feeds)
 	$(COMPOSE) up --build
 
 down:      ## stop the local stack
 	$(COMPOSE) down
+
+replay-up:   ## $0 public demo stack: postgres + api + ui + fixture replay, no GPU/LLM (docs/12 M6)
+	$(REPLAY_COMPOSE) up --build
+
+replay-down: ## stop the replay demo stack
+	$(REPLAY_COMPOSE) down
 
 test:      ## unit + integration + contract tests
 	uv run pytest

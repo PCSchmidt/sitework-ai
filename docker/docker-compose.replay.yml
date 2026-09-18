@@ -1,0 +1,100 @@
+# $0 public demo stack (docs/12 M6, docs/11-risks.md rollback position #2):
+# postgres + api + ui + the replay service, in place of docker-compose.yml's
+# mediamtx/vision-*/agent services -- no GPU, no prime-agent subscription
+# running 24/7. A standalone file rather than a docker-compose.yml override,
+# since what's needed here is a different *set* of services, not a patch to
+# the existing ones (compose has no clean "omit this service" override verb).
+#
+# Run: docker compose -f docker/docker-compose.replay.yml up --build
+#
+# Explicit `name:` (Compose defaults the project name to the directory --
+# `docker/`, same as docker-compose.yml -- which collides on container/network
+# names and would recreate/take over a running docker-compose.yml stack; a
+# live test of this file without an explicit name did exactly that).
+name: sitework-replay-demo
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: sitewatch
+      POSTGRES_PASSWORD: sitewatch
+      POSTGRES_DB: sitewatch
+    volumes:
+      - pgdata_replay:/var/lib/postgresql/data
+    healthcheck:
+      # api and replay both connect on first boot; a live test without this
+      # hit a real crash-loop -- `depends_on` alone only waits for the
+      # container to *start*, not for Postgres to actually accept
+      # connections yet, so both exited on ConnectionRefusedError.
+      test: ["CMD-SHELL", "pg_isready -U sitewatch -d sitewatch"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    environment:
+      DATABASE_URL: postgresql://sitewatch:sitewatch@postgres:5432/sitewatch
+      WORKSPACE_ROOT: /workspace
+    volumes:
+      - replay_workspace:/workspace:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # replay depends on this, not just on postgres: api's own lifespan
+      # (api/main.py) runs `init_schema` (CREATE TABLE IF NOT EXISTS ...) on
+      # startup, and FastAPI's lifespan context manager doesn't serve
+      # requests until that finishes -- so a 200 here also means the
+      # `incidents` table actually exists. Without this, a live test hit
+      # replay's very first persist() racing ahead of schema creation:
+      # `asyncpg.exceptions.UndefinedTableError: relation "incidents" does
+      # not exist`.
+      test: ["CMD", "python3", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/healthz', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  # Replaces mediamtx + vision-* + agent: no video, no GPU, no LLM calls --
+  # loops the 30 seeded fixtures (evaluation/fixtures/incidents/) as a
+  # live-looking incident feed straight into the same Postgres/API/WS path a
+  # real incident would take (scripts/replay_demo.py).
+  replay:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.replay
+    command:
+      ["python3", "-m", "scripts.replay_demo",
+       "--workspace-root", "/workspace",
+       "--postgres-dsn", "postgresql://sitewatch:sitewatch@postgres:5432/sitewatch",
+       "--interval-s", "15", "--shuffle"]
+    volumes:
+      - replay_workspace:/workspace
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [internal]
+
+  ui:
+    image: node:20.18-bookworm-slim
+    working_dir: /app
+    volumes:
+      - ../ui:/app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "5173:5173"
+    depends_on: [api]
+    networks: [internal]
+
+networks:
+  internal:
+
+volumes:
+  pgdata_replay:
+  replay_workspace:

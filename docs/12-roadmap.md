@@ -369,7 +369,41 @@ the sustained-load number, since that's the actual production duty cycle, not th
       (only Serverless v1, which doesn't support Postgres in most regions, could do that); Scenario
       A's idle/mo figures revised from ~$5-15 (implicitly assumed a free DB) to ~$50-65/~$55-75/
       ~$20-40 across AWS/GCP/Azure. See `docs/10-cost-model.md` §4 for the reasoning.
-- [ ] Simulated-live replay mode (fixtures → cloud backend) for the $0 public demo
+- [x] Simulated-live replay mode (fixtures → cloud backend) for the $0 public demo -- done
+      2026-09-18. `scripts/replay_demo.py` loops the 30 M5 seeded fixtures
+      (`evaluation/fixtures/incidents/`) into the real Postgres/API/WS path with no GPU vision
+      container and no LLM call in the loop -- the two components that cost real money to run
+      continuously. Honest by construction, not just by convention: `classification`/`state` are
+      each fixture's own hand-labeled ground truth (`expected.json` -- the same labels M3/M5's real
+      agent-eval runs scored against), `narrative_md` is a `[REPLAY DEMO]`-tagged deterministic
+      template (never to be confused with a real agent narrative), and for proximity fixtures
+      `verified_kinematics` is genuine recomputation -- `agent.band3.recompute_kinematics` replays
+      the actual captured `tracks.jsonl` through the same pairwise-distance math the Band-3 gate
+      itself uses, not a copied-through number (verified: `evt_seed_violation_01`'s replayed
+      min-distance is 0.70 m, matching the fixture's seeded metric exactly, because it's the same
+      computation, not a coincidence). `agent_run` reports `model="replay-mode (no LLM call)"`,
+      tokens=0 -- so existing observability doesn't miscount these as real agent invocations.
+      `docker/Dockerfile.replay` is deliberately not `Dockerfile.agent`: pure Python
+      (pydantic/pyyaml/asyncpg only), no Node/prime-agent -- sidestepping prime-agent's still-open
+      private-registry gap (docs/12 M3 notes) entirely for the public-demo path.
+      `docker/docker-compose.replay.yml` is a standalone compose file (postgres + api + ui +
+      replay, no mediamtx/vision-\*/agent), not an override -- compose has no clean "omit this
+      service" verb. Two real bugs found and fixed by actually running the stack, not by
+      inspection: (1) no explicit `name:` meant it defaulted to the same project name as
+      `docker-compose.yml` (both files live in `docker/`) and a live test **recreated the main
+      dev stack's `postgres` container** on shared container/network names -- fixed with an
+      explicit `name: sitework-replay-demo`; (2) `depends_on: [postgres]` alone only waits for the
+      container to *start*, not for Postgres to accept connections or for `api`'s own
+      `init_schema` to have run yet -- a live test hit both races for real (`api` and `replay` both
+      crashed with `ConnectionRefusedError` on first boot, then `replay` crashed again with
+      `UndefinedTableError: relation "incidents" does not exist` once Postgres was up but before
+      `api`'s schema-creating startup had finished) -- fixed with a `postgres` healthcheck
+      (`pg_isready`) and an `api` healthcheck (`/healthz`, which only returns 200 once its
+      lifespan's `init_schema` has completed), with `depends_on: condition: service_healthy`
+      gating both `api` (on postgres) and `replay` (on api). Re-verified clean after the fix:
+      `docker compose up` brings all three up in the correct order, `GET /api/v1/incidents`
+      serves real replayed records, and the evidence viewer (`GET .../evidence/tracks`) round-trips
+      the staged `tracks.jsonl`. `make replay-up`/`make replay-down` added.
 - [ ] README narrative, ADR finalization, demo GIF/video, architecture diagrams (C4 + sequence)
 - [ ] Helm chart explicitly descoped (stretch only, not part of M6 exit)
 **Exit:** S5 met; public demo $0/mo; portfolio package complete.

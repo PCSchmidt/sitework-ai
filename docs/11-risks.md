@@ -19,5 +19,7 @@ If time compresses, the project degrades gracefully in this order (each keeps a 
 
 1. Drop multi-cloud Terraform to AWS-only (the PDF spec already exists).
 2. Replace live agent path with replay-mode agent results (fixtures) — dashboard story intact.
+   **Built, not just a fallback plan** (M6, 2026-09-18): `scripts/replay_demo.py` +
+   `docker/docker-compose.replay.yml` (`make replay-up`) — see docs/12-roadmap.md's M6 entry.
 3. Drop PPE classes (fine-tuning) — keep person/vehicle + spatial rules.
 4. Drop tracking eval (MOTA/IDF1) — keep FPS/latency benchmarks.

@@ -1,0 +1,24 @@
+# Simulated-live replay demo (docs/12 M6): the $0-public-demo substitute for
+# the GPU vision workers + Dockerfile.agent's prime-agent container. Pure
+# Python, no Node/prime-agent (which also isn't installable here without the
+# vendored-tarball workaround Dockerfile.agent needs -- docker/vendor/README.md)
+# and no torch/ultralytics -- scripts/replay_demo.py only needs pydantic/
+# pyyaml/asyncpg, same minimal set agent/persistence.py itself needs.
+FROM python:3.11.11-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+RUN pip install --no-cache-dir uv
+RUN uv pip install --system --no-cache pydantic pyyaml asyncpg
+
+COPY agent ./agent
+COPY api ./api
+COPY pipelines ./pipelines
+COPY config ./config
+COPY scripts/replay_demo.py ./scripts/replay_demo.py
+COPY evaluation/fixtures/incidents ./evaluation/fixtures/incidents
+
+CMD ["python3", "-m", "scripts.replay_demo", \
+     "--workspace-root", "/workspace", \
+     "--postgres-dsn", "postgresql://sitewatch:sitewatch@postgres:5432/sitewatch"]
