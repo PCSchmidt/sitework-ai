@@ -5,8 +5,12 @@ Gitignored — never commit the `.tgz` itself.
 
 ## Why this directory exists
 
-`prime-agent` (github.com/PCSchmidt/prime-agent) is not published to the public npm
-registry — its `package.json` has `"private": true`. `npm install -g prime-agent@x.y.z`
+`prime-agent` is Prime Intellect's open-source RLM agent
+([PrimeIntellect-ai/prime-agent](https://github.com/PrimeIntellect-ai/prime-agent); this
+project's install came from the author's fork,
+[PCSchmidt/prime-agent](https://github.com/PCSchmidt/prime-agent)). It is not published to the
+public npm registry (`npm view prime-agent` returns 404, re-checked 2026-09-26) — the upstream
+repo's root `package.json` has `"private": true`. `npm install -g prime-agent@x.y.z`
 inside a Docker build only works on a machine that happens to have it installed
 globally already; it fails everywhere else, including CI. Found and documented in
 `docs/spikes/spike-01-prime-agent-headless.md` (2026-09-17) — see that spike report
@@ -23,7 +27,10 @@ npm pack --pack-destination /path/to/sitework-ai/docker/vendor \
 
 This packs the already-built `dist/` from the global install (no separate build step
 needed). Match the resulting filename's version to `PRIME_AGENT_VERSION` in
-`Dockerfile.agent` (default `0.9.3`, the version this was verified against).
+`Dockerfile.agent` (default `0.9.3`, the version this was verified against). Upstream has
+since moved on (0.9.6 as of 2026-09-26); bumping means re-recording the golden RPC session
+(`scripts/record_golden_session.py`) and re-running the contract test, not just changing the
+number.
 
 ## The real fix
 

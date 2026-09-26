@@ -39,6 +39,9 @@ Band 3 executes only validated, deterministic actions.
 - Proximity: minimum metric distance from homography-projected ground points.
 - Dwell: timestamp arithmetic on zone membership intervals.
 - Hard alarms: rule engine fires buzzer/SMS/push simulation **immediately** on violation.
+  *(As built: the rule engine emits its `TriggerEvent` immediately, but no alarm consumer was
+  built; the first human-visible signal is the dashboard entry after agent verification. See
+  docs/02 §3.)*
 
 ### Band 2 — Probabilistic (LLM, gated)
 - **Context & intent:** worker next to a tagged-out, idle excavator during lunch ≠ worker walking
@@ -50,6 +53,11 @@ Band 3 executes only validated, deterministic actions.
 - **Parameter adaptation (proposal-only):** "expand buffer radius 1.5× during rain/shift change" —
   emitted as a *directive proposal*, applied only after deterministic validation and a human or
   policy approval flag.
+
+*As built, Band 2 does one of these four things:* it re-derives the kinematics of a triggered
+event by running code against the raw tracks, and classifies it (near-miss causality, in a
+narrow numeric form). Context from equipment state or shift schedule, regulatory narrative
+writing, and parameter proposals were not built; see docs/05's as-built note.
 
 ### Band 3 — Deterministic gates on agent output
 - Pydantic schema validation + range checks + enum severity clamps.
@@ -69,6 +77,8 @@ Band 3 executes only validated, deterministic actions.
 ## 4. Failure Domain Isolation
 
 - **LLM outage:** Band 1 alarms keep working at ≤ 500 ms. Triggers buffer. No safety regression.
+  *(As built: triggers keep firing and buffer in Redis, and a failed agent call becomes a
+  `needs_review` incident rather than a lost one. The ≤ 500 ms alarm itself isn't built.)*
 - **Hallucination attempt:** verification gate rejects; incident goes to `needs_review` state with
   the raw telemetry retained; audit log records the rejection.
 - **Latency spike:** agent work is async by construction; the alert path never waits.

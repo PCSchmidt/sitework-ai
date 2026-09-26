@@ -6,8 +6,9 @@
 - Vision default: **YOLO11s**. Settled by spike-00 (2026-09-16): on the
   RTX A4500 at 1080p, 11s matches 11n throughput (35.0 vs 36.0 FPS — both decode-bound) with better
   accuracy, so the larger model is free. 11n remains available via config. ByteTrack + Kalman.
-  RT-DETR benchmarked for comparison; Grounding DINO/OWL-ViT restricted to research spikes
-  (too slow for fast path). **TensorRT FP16 export landed at M5, not M2 as this ADR originally
+  RT-DETR was planned as a benchmark comparison but was never run (docs/benchmarks.md scopes
+  the M5 matrix to YOLO11n/s); Grounding DINO/OWL-ViT restricted to research spikes (too slow
+  for fast path). **TensorRT FP16 export landed at M5, not M2 as this ADR originally
   planned** — `tensorrt` was never actually installed until then, a real doc/reality gap M5's pass
   closed and measured (34-57% single-stream speedup; see `docs/benchmarks.md`). It's still not
   wired as `pipeline.py`'s runtime default (the `Detector`'s own weights arg still defaults to the
@@ -25,8 +26,14 @@
   for heartbeats; T3 larger models only for escalations (2 failed T1 turns) and final shift
   synthesis. Routing via OpenAI-compatible base URL (OpenRouter/Z.ai/local vLLM) — compatible with
   prime-agent model configuration; per-incident budgets enforced by `--autonomous-*` flags.
+  **As built:** a single tier. Every incident runs on the model prime-agent's own configuration
+  selects (GLM-Flash class via OpenRouter in the evals); T2/T3 routing and the 2-strike escalation
+  were never wired. The per-incident budget is enforced by `agent/prime_adapter.py`'s external
+  210 s timeout, since spike-01 showed the `--autonomous-*` flags alone don't stop a runaway task.
 
 ## Consequences
 + Cents-per-incident economics; vendor-agnostic; vision upgrade path is a config change.
 - Flash-class tool discipline is imperfect (markdown instead of executing REPL code): mitigated by
-  strict harness policy, 2-strike escalation, and the Band-3 validation gate.
+  the Band-3 validation gate and schema validation (the harness policy and 2-strike escalation
+  were designed but not built). In the M5 eval (n=30) every run that finished produced a
+  schema-valid result; the only failures were timeouts.

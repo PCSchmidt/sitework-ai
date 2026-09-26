@@ -1,5 +1,14 @@
 # 01 — Vision & Scope
 
+> **Vision vs. what was built (reviewed 2026-09-26).** This doc records the original vision, and
+> it's kept as written. The delivered system (M0–M6, all closed) covers the core of it: detection
+> and tracking of people and vehicles, metric ground-plane geometry, deterministic proximity,
+> zone-dwell, and speed rules, the agent verification loop with its Band-3 gate, and a live
+> incident dashboard. Four pieces of the vision below were **not** built: PPE (helmet/vest)
+> detection, so the "unhelmeted worker" scenario in §3 can't run; the dashboard's live video
+> overlay and 2D site map; agent-written end-of-shift reports (a deterministic HTML report stands
+> in); and any hosted demo. The full list of disclosed gaps is in docs/02 §1 and docs/12-roadmap.md.
+
 ## 1. Problem Statement
 
 Industrial environments — loading docks, warehouses, active construction sites — mix fast heavy machinery with vulnerable humans. Safety programs today rely on human spot-checks, static signage, and after-the-fact incident review. Continuous, automated, *explainable* safety telemetry is the gap SiteWatch AI addresses:
@@ -63,6 +72,8 @@ Primary: verified public datasets (see `04-data-and-models.md` §1 — validated
 M1-prep).
 Demo clips: 3 Pexels clips mapped 1:1 to the demo cameras (`data/manifests/pexels-demo-clips.yaml`),
 pinned in `assets/clips/` (git-ignored) so the demo never breaks when upstream sources change.
+Because they're git-ignored, a fresh clone has to download them (and the detector weights) before
+the full stack runs; the replay demo (`make replay-up`) needs neither.
 
 ## 7. Constraints
 

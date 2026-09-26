@@ -4,10 +4,10 @@
 
 | Level | What | Tooling |
 | --- | --- | --- |
-| Unit | schemas, geometry (homography known-answer tests), rule engine (synthetic tracklets), adapter serialization | pytest, fast, no GPU |
-| Integration | compose stack with synthetic feeds: detector on fixture image → tracklet → trigger → agent stub → API | docker compose + pytest |
-| Contract | golden RPC session vs pinned prime-agent; schema compat between TS/Py | CI `contract-agent.yaml` |
-| E2E replay | recorded tracklet fixtures replayed over WS; snapshot dashboard states | **not built** -- `ui`'s `npm test` is `vitest run --passWithNoTests` (zero vitest tests exist); the closest real thing is `scripts/replay_demo.py` (M6), which replays fixtures into the real API/DB/WS path for a live demo, not as an automated dashboard-snapshot test |
+| Unit | schemas, geometry (homography known-answer tests), rule engine (synthetic tracklets), adapter serialization | pytest, fast, no GPU — 130 run offline |
+| Integration | API/repository/persistence round-trips against a real Postgres | pytest `@pytest.mark.integration` — 27 tests; skip without a DB, run for real in CI's Postgres service. The originally planned "detector on a fixture image → … → API" compose-level test was not built; `scripts/smoke_test.py` (§6) covers trigger → agent (stubbed) → Postgres → WS by hand |
+| Contract | golden RPC session vs pinned prime-agent; schema compat between TS/Py | CI `contract-agent.yaml` (golden replay); CI `ci.yaml` fails if the exported JSON Schemas in `schemas/` are stale |
+| E2E replay | recorded tracklet fixtures replayed over WS; snapshot dashboard states | **not built** -- `ui`'s `npm test` is `vitest run --passWithNoTests` (zero vitest tests exist); the closest real thing is `scripts/replay_demo.py` (M6), which replays fixtures into the real API/DB/WS path for a live demo, not as an automated dashboard-snapshot test (its own logic has 7 unit tests in `tests/test_replay_demo.py`) |
 | Benchmark | FPS/latency/VRAM matrix, MOTA/IDF1 | `evaluation/`, manual dispatch, GPU |
 
 ## 2. Known-Answer Tests (determinism proofs)
@@ -56,11 +56,28 @@ folder.
 ## 5. Reproducibility Rules
 
 - Pinned weights + seeds + dataset manifests (SHA256) → every number in `docs/benchmarks.md`
-  regenerable with `make eval`.
-- Fixture-based CI runs CPU-only (no GPU in CI): use exported ONNX + CPU EP for a smoke path.
+  regenerable with `make eval`. Clip and weight hashes were recorded 2026-09-26
+  (`data/manifests/`); the TensorRT engines are GPU-specific and must be rebuilt, not hashed.
+- CI runs CPU-only with no GPU. The planned ONNX + CPU-execution-provider smoke path for the
+  detector was not built, so CI never runs the detector; the vision code is covered by unit
+  tests on synthetic tracklets, and detector throughput is measured by hand on the GPU.
 
 ## 6. Demo Smoke Test
 
 `scripts/smoke_test.py`: inject a synthetic TriggerEvent into the broker → assert incident row
-created → assert WS message observed → print PASS. Runs in CI integration job with agent stubbed,
-and locally against the real stack.
+created → assert WS message observed → print PASS. It runs **by hand** against a running stack
+(agent stubbed by default, `--real-agent` for the real CLI). It is not wired into CI; the same
+round trip is covered in CI by the Postgres-backed integration tests.
+
+It injects straight into Redis, so it does not exercise the vision pipeline's evidence writing.
+That blind spot hid a real bug until 2026-09-18: the vision containers weren't sharing the
+evidence volume with the agent (docs/12 M6).
+
+## 7. Known gaps in coverage
+
+- **Dashboard:** `npm test` passes with zero tests (`vitest run --passWithNoTests`). The UI is
+  verified only by `tsc` + `vite build` and by manual runs.
+- **Prompt injection:** no red-team fixture test exists (docs/11 R9, docs/08 §2).
+- **Detector in CI:** none (see §5).
+- **Full-stack end to end:** the path camera → detector → rule → evidence → agent → dashboard
+  has never been exercised as one automated test.

@@ -23,6 +23,13 @@ The defining architectural idea — and the portfolio centerpiece — is the **d
 - **Slow path (probabilistic, event-driven):** a containerized Prime Agent reasoning worker with
   sub-agent specialists (trajectory/collision inspector, compliance auditor, shift synthesizer) that consumes structured anomaly events — not raw frames — and produces explainable, auditable incident reports.
 
+> **As built.** The plan above is kept as written. What shipped is the dual-plane core: the
+> deterministic fast path (YOLO11s + ByteTrack + homography + rule engine), the Prime Agent
+> verification loop with its Band-3 gate, Postgres persistence, and a live dashboard. The slow
+> path runs **one** verification role (not three sub-agent specialists), and there is no shift
+> synthesizer, compliance-auditor agent, PPE detection, or live video/site-map view. Details:
+> [docs/02 §1](docs/02-system-architecture.md) and [docs/05](docs/05-agent-orchestration.md).
+
 Cost discipline is a first-class requirement: the entire system develops and demos **locally at 
 ~$0** (MediaMTX-simulated RTSP feeds, Docker Compose, free/cheap open-weight LLMs such as
 GLM-Flash class models via OpenRouter/Z.ai), and the cloud story is delivered as a **deployable reference architecture** — syntactically validated Terraform for AWS, GCP, and Azure plus enterprise-grade runbooks — without ever paying for always-on cloud GPU infrastructure.
@@ -48,14 +55,14 @@ GLM-Flash class models via OpenRouter/Z.ai), and the cloud story is delivered as
 
 ## 3. Success Criteria
 
-| # | Criterion | Measured by |
-| --- | --- | --- |
-| S1 | Full stack runs offline with one command | Fresh-clone `docker compose up --build` smoke test passes |
-| S2 | ≥ 3 concurrent streams at ≥ 25 FPS on the target GPU recorded in `docs/spikes/spike-00-gpu-benchmark.md` (fallback: 2 streams if the probe shows laptop-class hardware) | `evaluation/benchmark_models.py` output, published to `docs/benchmarks.md` (generated deliverable, produced at M5) |
-| S3 | LLM invoked < 5 times per 10-min clip | Telemetry counters in event bus audit log |
-| S4 | Every *persisted* agent output validates against schemas | 100% of incident records pass the schema + recomputation gate (failures route to `needs_review`, never the DB); first-try pass rate ≥ 90% is the tracked agent-quality metric (`docs/09-testing-and-evaluation.md`) |
-| S5 | `terraform validate` green on 3 clouds | GitHub Actions workflow `iac-check.yaml` |
-| S6 | Eval harness reproduces published numbers | `make eval` runs headless, seeded, CPU/GPU-portable |
+| # | Criterion | Measured by | Final status (reviewed 2026-09-26) |
+| --- | --- | --- | --- |
+| S1 | Full stack runs offline with one command | Fresh-clone `docker compose up --build` smoke test passes | **Partly met.** `scripts/smoke_test.py` passed against the real compose stack on the dev machine (M4). A fresh clone can't run `make up` without first downloading the demo clips and detector weights (both git-ignored) and vendoring `prime-agent` (not on npm). The zero-setup path is `make replay-up`, which needs only Docker. |
+| S2 | ≥ 3 concurrent streams at ≥ 25 FPS on the target GPU recorded in `docs/spikes/spike-00-gpu-benchmark.md` (fallback: 2 streams if the probe shows laptop-class hardware) | `evaluation/benchmark_models.py` output, published to `docs/benchmarks.md` (generated deliverable, produced at M5) | **Met, with a caveat.** 3-stream FP16 TensorRT reached 30.2 FPS min-stream on an idle-recovered GPU; under sustained thermal load it dropped to 9.5–13.2 FPS/stream. Both are published. |
+| S3 | LLM invoked < 5 times per 10-min clip | Telemetry counters in event bus audit log | **Not measured.** By design the LLM runs only on trigger events, and rule cooldowns limit repeats, but no 10-minute recording has been run with calls counted. |
+| S4 | Every *persisted* agent output validates against schemas | 100% of incident records pass the schema + recomputation gate (failures route to `needs_review`, never to `confirmed`); first-try pass rate ≥ 90% is the tracked agent-quality metric (`docs/09-testing-and-evaluation.md`) | **Met.** Every persisted record is a validated `IncidentRecord`; anything that fails schema, Band-3, or the timeout is stored as `needs_review`. First-try pass: 10/10 at M3; 26/30 (86.7%) raw at M5, all four misses timeouts, 30/30 on retest with the recalibrated timeout. |
+| S5 | `terraform validate` green on 3 clouds | GitHub Actions workflow `iac-check.yaml` | **Met.** |
+| S6 | Eval harness reproduces published numbers | `make eval` runs headless, seeded, CPU/GPU-portable | **Met for the benchmark and tracking harnesses.** The agent eval (`make agent-eval`) also needs a local `prime-agent` install. |
 
 ## 4. Architecture at a Glance
 
@@ -91,6 +98,11 @@ GLM-Flash class models via OpenRouter/Z.ai), and the cloud story is delivered as
 |  React/Vite dashboard: live bounding boxes + 2D site map      |
 +---------------------------------------------------------------+
 ```
+
+This is the original target diagram. As built there is no live bounding-box view or 2D site map,
+and the slow path runs one verification role rather than the three sub-agents shown; the
+diagrams of what actually runs are in [docs/13-architecture-diagrams.md](docs/13-architecture-diagrams.md)
+and the [README](README.md#architecture-at-a-glance).
 
 Details: [docs/02-system-architecture.md](docs/02-system-architecture.md).
 Design rationale: [docs/03-hybrid-design.md](docs/03-hybrid-design.md) and ADRs in [docs/adr/](docs/adr/).
@@ -151,7 +163,7 @@ Full milestone detail with task breakdowns: [docs/12-roadmap.md](docs/12-roadmap
    retry/escalation policy, agent outputs never auto-execute safety actions.
 4. **Cost leak from autonomous agents** — mitigation: hard turn/token/time caps, trigger-rate budget alarms, tiered model routing.
 5. **Homography accuracy on real footage** — mitigation: manual calibration tooling + documented error bounds; treat metric distances as estimates with confidence intervals.
-6. **Prime Agent interface drift** — mitigation: pinned version, single adapter module, golden RPC contract test in CI; LiteLLM fallback worker behind identical contracts (ADR-005).
+6. **Prime Agent interface drift** — mitigation: pinned version, single adapter module, golden RPC contract test in CI; LiteLLM fallback worker behind identical contracts (ADR-005). The fallback (`agent/worker_fallback.py`) is a deliberate stub: spike-01 passed, so it was never needed.
 
 Full register: [docs/11-risks.md](docs/11-risks.md). Prime Agent embedding feasibility:
 [docs/prime-agent-feasibility.md](docs/prime-agent-feasibility.md).

@@ -466,6 +466,45 @@ the sustained-load number, since that's the actual production duty cycle, not th
 **Exit:** S5 met; public demo $0/mo; portfolio package complete.
 **M6 CLOSED 2026-09-26.** All exit criteria met; the Helm chart stays a descoped stretch item.
 
+## Post-M6 documentation review (2026-09-26)
+
+A full pass over every markdown file, checking claims against the code, compose files, and
+tests. The README was rewritten for readers new to the project, leading with the dual-plane idea
+and what an RLM is. Findings, all now documented in the docs named:
+
+- **Undisclosed gaps between design and build**, now marked as-built or not-built in place:
+  no alarm consumer on `trigger_events`, so incidents surface only after the ~1-minute agent step
+  (docs/02 §3, docs/03); the API, WebSocket, and DB sections described unbuilt routes, messages,
+  and tables (docs/06 §4–6); Band-3 checks distance and closing velocity only, not
+  `duration_s`/`ttc_s` (docs/06 §3); most container/data hardening is design-only, and the
+  API/dashboard ports are published on all interfaces with no auth (docs/08 §2); no per-day
+  budget alarm, CLI caps stated wrong (docs/10 §2); the agent runs one role with no harness specs,
+  routing, or scheduling (docs/05, ADR-003, docs/prime-agent-feasibility.md); `root_policy.md` is
+  not sent to the agent and told it to use an invalid classification value (fixed; docs/08 §4).
+- **The demo cameras never fire rules.** With no calibration file, the pipeline leaves ground
+  positions empty, so on the three demo clips the full stack detects and tracks but no rule can
+  fire. The incident path has been verified via fixtures, the smoke test, and replay mode, not
+  end to end from a demo camera (README Limitations, PLAN.md S1).
+- **A fresh clone can't run `make up`**: clips, weights, and the prime-agent package are all
+  outside git, and the vision containers mount `data/models` read-only, so they can't
+  auto-download weights. Setup steps are now in the README Quickstart and the clip/weight
+  READMEs. `make replay-up` was verified from a fresh GitHub clone with Docker only.
+- **Success criteria:** PLAN.md §3 now carries a final status per criterion. S3 (LLM calls per
+  10-minute clip) was never measured.
+- **Provenance:** demo-clip and YOLO11 weight SHA-256 hashes recorded in `data/manifests/` (the
+  weight hashes checked against the Ultralytics release URLs); the Ultralytics AGPL-3.0 note the
+  manifest promised is now in the README's License section.
+- **Smaller corrections:** RT-DETR was never benchmarked (ADR-003); INT8 appeared as a current
+  latency figure (docs/02); `agent/harness/README.md` described a folder that was never populated;
+  the smoke test isn't in CI (docs/09 §6); no red-team tests exist (below, docs/11 R9); the
+  feasibility doc's "the agent that built the system" framing was inaccurate.
+
+Code-level follow-ups surfaced but not changed in this pass: bind published ports to
+`127.0.0.1`; an alarm consumer on `trigger_events`; calibrate the demo cameras (needs real
+measurements); `api/main.py`'s camera-health response still says the watchdog is "not yet wired
+(M5)".
+
 ## Ongoing habits
 - Weekly: one merged demoable increment; keep `docs/spikes/` for any 1–2 day investigations.
 - Red-team fixtures for prompt injection added alongside agent features (docs/08-security.md).
+  **Not done:** no red-team fixtures exist as of 2026-09-26 (docs/09 §7, docs/11 R9).

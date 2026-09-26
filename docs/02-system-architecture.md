@@ -17,7 +17,7 @@ SiteWatch AI is a set of cooperating containers organized in four planes. Video 
 | FAST PATH — PERCEPTION PLANE (pipeline/vision, GPU container)             |
 |                                                                          |
 |  FrameSource -> Decoder (GStreamer/PyAV, batched)                        |
-|      -> Detector (YOLO11 / RT-DETR, TensorRT FP16/INT8)                  |
+|      -> Detector (YOLO11s, TensorRT FP16; INT8/RT-DETR not built)        |
 |      -> Tracker (ByteTrack; BoT-SORT optional)                           |
 |      -> State Estimator (per-track Kalman: position, velocity)           |
 |      -> Geometry (homography px->meters; velocity in m/s)                |
@@ -96,13 +96,22 @@ Target: **< 1.5 s from physical event to dashboard alert**; agent enrichment add
 | Stage | Budget | Notes |
 | --- | --- | --- |
 | RTSP decode (per stream) | ≤ 20 ms/frame | hardware decode where available; 3 streams |
-| Detection | ≤ 15 ms/frame batch | YOLO11s INT8, batch=3–4 frames |
+| Detection | ≤ 15 ms/frame batch | planned as YOLO11s INT8, batch 3–4; **measured** (single stream, 1080p): YOLO11s FP16 TensorRT p50 9.4 ms / p95 16.0 ms, FP32 p50 20.7 ms. INT8 and batching were never built (docs/benchmarks.md) |
 | Tracking + state | ≤ 3 ms/track | ByteTrack, CPU-able |
 | Homography + rules | ≤ 2 ms/track | precomputed polygons, vectorized Shapely/NumPy |
 | Telemetry publish | ≤ 5 ms | Redis XADD, fire-and-forget |
 | Broker → API → browser | ≤ 100 ms | WebSocket push |
 | **Deterministic alert total** | **≤ ~500 ms** | hard interlock class alarm fires here |
 | Agent triage (async) | 5–30 s | queued; not in alert path |
+
+**As built:** the deterministic half holds (rules run every frame and a `TriggerEvent` lands on
+the Redis `trigger_events` stream as soon as a rule fires), but **no alarm consumer exists**:
+nothing sounds a buzzer or pushes an alert off that stream. A person sees the incident only when
+it appears on the dashboard, after agent verification and the Band-3 gate. Measured agent triage
+p50 was 75.6 s (M3) and 68.8 s (M5), not 5–30 s. What the design does guarantee as built: the agent
+can't suppress a trigger, because a timeout, crash, or bad answer still produces a
+`needs_review` incident. Wiring an alarm consumer to `trigger_events` is the missing piece for a
+true sub-second alert path.
 
 ## 4. Data Flow Contracts
 

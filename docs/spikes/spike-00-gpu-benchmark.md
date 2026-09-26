@@ -59,3 +59,13 @@
 - **Model:** YOLO11s FP16 TensorRT is the M2 default. INT8 evaluation stays on the M3 plan.
 - **Follow-up task (M2):** `model.export(format="engine", half=True)` + benchmark rerun, recorded
   in `docs/benchmarks.md`.
+
+## Later outcome (added 2026-09-26; the decisions above are left as written)
+
+- The TensorRT FP16 export happened at **M5, not M2**: `tensorrt` wasn't actually installed
+  until then. It delivered a 34–57% single-stream speedup, and 3 streams cleared 25 FPS (30.2 FPS
+  min-stream) on an idle-recovered GPU but not under sustained thermal load (9.5–13.2 FPS/stream).
+  Both results are published in docs/benchmarks.md.
+- FP16 TensorRT is **not** the pipeline's runtime default: `pipeline.py` still loads the `.pt`
+  weights, and only the benchmark harness loads `.engine` files.
+- INT8 was never evaluated at any milestone.

@@ -12,7 +12,7 @@ R2 history. **Actual sources, downloaded and manifested in `data/manifests/`:**
 | **NVIDIA PhysicalAI Spatial Intelligence Warehouse** (HF) | Synthetic Omniverse RGB-D stills, warehouse scenes w/ forklifts + spatial QA | spike-02 forklift-class test set (stills) | **CC-BY-4.0** (gated: free HF account) |
 | **Pexels demo clips** (7 selected) | Stock video: forklift/worker interaction, walkway, excavator site, PPE | Demo feeds (MediaMTX loop) + S2 multi-stream benchmarks | **Pexels License** — free use, redistributable |
 | **MOT17** (via `Lekim89/MOT17` HF mirror) | Pedestrian tracking ground truth | MOTA/IDF1 baseline regression (M5) | research-only (eval only); motchallenge.net is EOL, mirror is the practical source |
-| **Pictor-v3 (Pictor PPE)** | 1,472 images, worker/hat/vest annotations | M5 PPE fine-tune | research, citation required; GDrive download |
+| **Pictor-v3 (Pictor PPE)** | 1,472 images, worker/hat/vest annotations | Planned for an M5 PPE fine-tune that never happened; not downloaded, no manifest | research, citation required; GDrive download |
 | **Ehsaanali construction-activity repo** | 15 real excavation clips | local-only supplement if Pexels excavator clips prove too short | ⚠️ no LICENSE — local use only, never committed |
 
 **Dropped after verification:** S2TLD-Construction (unverifiable provenance; name collides with
@@ -109,6 +109,11 @@ not re-fired within `cooldown_s` (default 120 s).
 | Hardware | record GPU model, driver, TensorRT version, batch size |
 
 Publication standard: every number reproducible via `make eval` with fixed seeds and pinned weights.
+
+**What was actually run (M5):** 2 models (YOLO11n, YOLO11s) × 2 precisions (FP32, FP16 TensorRT)
+× 1–3 streams, measuring FPS and p50/p95 latency and VRAM, plus MOTA/IDF1 on MOT17. The rest of
+the matrix above (YOLO11m, RT-DETR, INT8, 4 streams, mAP on Mendeley/PPE classes) was not run.
+Results and the reasoning for the narrower scope: docs/benchmarks.md.
 
 ## 6. LLM Models (see ADR-003 for full rationale)
 

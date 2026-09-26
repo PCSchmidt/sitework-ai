@@ -4,6 +4,26 @@ The cognitive plane is a containerized Prime Agent worker (feasibility and integ
 `docs/prime-agent-feasibility.md`). This doc defines *what the agents do*, not *how they are
 embedded*.
 
+> **As built (reviewed 2026-09-26).** Most of this doc is the original multi-agent design. What
+> actually runs is much narrower:
+>
+> - **One agent role, one prompt per incident.** `agent/worker.py` pops a `TriggerEvent`, starts
+>   a fresh `prime-agent --mode rpc` process for that incident, and sends one self-contained
+>   prompt: `agent/prompts/trajectory_inspector.md` for two-track proximity triggers,
+>   `generic_classification.md` for zone/speed triggers. The agent answers by running Python in
+>   its REPL against `tracks.jsonl` and writing `result.json`.
+> - **What Prime Agent capabilities are used:** the persistent Python REPL (code-executed
+>   verification), headless RPC mode, and `get_session_stats` for token/turn accounting.
+> - **Not used:** registered harness sub-agent specs (§2; `agent/harness/` is empty), explicit
+>   `rlm()` sub-agent orchestration, model-tier routing (§4), scheduling (§5), and session reuse
+>   or compaction (§6).
+> - **Not built:** the Compliance Auditor, Shift Synthesizer, Stream Watchdog, and Parameter
+>   Reviewer roles. Rule citations come from `config/rules.yaml`, not from an auditor agent, and
+>   shift reports come from a deterministic HTML renderer (`api/reports.py`).
+>
+> The parts that are real, and measured against the real CLI, are the verification loop, the
+> Band-3 gate, `needs_review` routing, and persistence (docs/eval-m5-agent-slow-path.md).
+
 ## 1. Runtime Agent Roles
 
 | Role | Trigger | Input | Output |
@@ -15,9 +35,11 @@ embedded*.
 | **Shift Synthesizer** (sub-agent, scheduled) -- **not built**; M4 shipped a deterministic substitute instead (see note below) | shift end (Prime Agent `add_schedule`; shift boundaries from `config/shifts.yaml`) | day's incidents + KPI queries via REPL | Markdown/PDF shift audit, KPI table, trend notes |
 | **Parameter Reviewer** (sub-agent, rare) — *optional, M5+* | recurring false-positive patterns | rejected-trigger stats | *proposal-only* threshold adjustments (human-approved) |
 
-**M3 scope is two sub-agents** (trajectory-inspector, compliance-auditor) plus the dispatcher in
-`worker.py` (not an agent). Watchdog, synthesizer, and parameter-reviewer land at M5/M4 as
-scheduled — keeping M3 aligned with PLAN.md §5.
+**M3 was scoped to two sub-agents** (trajectory-inspector, compliance-auditor) plus the
+dispatcher in `worker.py` (not an agent). In practice only the trajectory-inspector role shipped,
+as a prompt template rather than a registered sub-agent (see the as-built note above). The
+watchdog, synthesizer, and parameter-reviewer were planned for M4/M5 and never built; M4–M6 all
+closed without them.
 
 **M4 update:** what actually shipped for "shift reports" is `api/reports.py` -- a pure-function
 HTML renderer that stitches together each confirmed/needs_review incident's own `narrative_md`
@@ -61,10 +83,11 @@ pairwise-distance verification prompt for proximity triggers, a simpler single-t
 prompt for zone_intrusion/speed) rather than the root session spawning separate
 trajectory-inspector/compliance-auditor sub-agents; no `new_session`/shift-session warm-start or
 tier escalation yet; Band-3 gating (`agent/band3.py`) is real and enforced exactly as described
-above, including the `state=needs_review` + retained-evidence path. Postgres insert isn't wired yet
--- `worker.py` returns/logs a complete `IncidentRecord` and that lands with M4's dashboard/DB work,
-not as a gap in the agent pipeline itself. Promoting the two roles to real harness sub-agent specs
-(§2) and adding shift-session warm starts are natural M4/M5 follow-ups, not blockers.
+above, including the `state=needs_review` + retained-evidence path. Postgres persistence was
+added at M4 (`agent/persistence.py`), so every confirmed or needs_review record and its
+`agent_run` stats now land in the database. Promoting the roles to real harness sub-agent specs
+(§2) and adding shift-session warm starts were never done; both remain open ideas, not scheduled
+work.
 
 ## 4. Model Routing (tiers)
 
@@ -76,11 +99,18 @@ not as a gap in the agent pipeline itself. Promoting the two roles to real harne
 
 Routing is enforced via RPC `set_model` and environment (`OPENAI_BASE_URL`, `PRIME_DEFAULT_MODEL`).
 
+**Status:** not wired. Every incident runs on whatever model prime-agent's own configuration in
+`~/.prime` selects (a GLM-Flash-class model via OpenRouter during the evals). There is no T3
+escalation path, which is why docs/09's escalation-rate metric has no data. Budget controls as
+actually implemented are in docs/10 §2.
+
 ## 5. Scheduling
 
 End-of-shift synthesis uses the agent's own schedule/heartbeat mechanism (RPC `add_schedule` /
 `set_heartbeat`) rather than external cron — one fewer moving part, and it keeps the schedule in
 the same persistent harness state. Guard: heartbeat prompts must be idempotent and cheap.
+
+**Status:** not built (no schedules or heartbeats are registered).
 
 ## 6. Concurrency & Scaling
 
@@ -90,6 +120,12 @@ the same persistent harness state. Guard: heartbeat prompts must be idempotent a
 - Session hygiene: `compact` after every 10 incidents (initial value; tune via
   `get_session_stats` token counts); `new_session` per shift boundary from `config/shifts.yaml`;
   auto-compaction on.
+
+**Status:** the as-built design sidesteps session hygiene by starting a fresh `prime-agent`
+process with `--no-session` per incident. That costs a cold start each time (visible in the
+~50–90 s triage latencies) but means no state leaks between incidents. Queue backpressure and
+consumer-group crash recovery are real (`pipelines/broker/streams.py`). A single worker processes
+one incident at a time; no queue-depth alarm or autoscaling exists.
 
 ## 7. Observability
 

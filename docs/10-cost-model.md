@@ -16,7 +16,9 @@ exists precisely so they don't have to).
 
 ## 2. LLM Spend Mechanics
 
-- Trigger gating: LLM touches only TriggerEvents (< 5 per 10-min clip), never frames.
+- Trigger gating: LLM touches only TriggerEvents, never frames. The "< 5 per 10-min clip" target
+  (PLAN.md S3) is a design target that has **not been measured**: the demo clips are 12–26 s
+  loops, and the full stack has never been run against a 10-minute recording with calls counted.
 - Tier-1 workers (GLM-Flash class): ~$0.08–$0.15/M input tokens (or free endpoints).
   Per-incident estimate: ~15–30 K tokens ⇒ **~$0.001–$0.005 per incident**. **Measured (spike-01 +
   M3 eval, 2026-09-17):** real runs ran 43.5–56.2 K tokens/incident, above this estimate, but cost
@@ -30,15 +32,29 @@ exists precisely so they don't have to).
   runbooks and prefer free-tier endpoints for T2.
 - Escalations (tier-3): ≤ 15% of incidents by target, adds ≤ ~$0.02/incident worst case.
 
-**Hard caps:** `--autonomous-max-turns 8`, `--autonomous-max-tokens 50000`,
-`--autonomous-timeout-ms 120000` per incident (verified prime-agent flags); per-day incident
-budget alarm in `worker.py` (e.g., 500 incidents/day ⇒ pause queue + page).
+**Caps as implemented (`agent/prime_adapter.py`):** `--autonomous-max-turns 8` and
+`--autonomous-max-tokens 40000` are passed to prime-agent, but spike-01 showed the CLI's own
+caps don't reliably stop a runaway task. The real ceiling is the adapter's external wall-clock
+timeout: **210 s per incident** (`DEFAULT_TIMEOUT_S`), after which the process is killed and the
+incident goes to `needs_review`. The CLI's `--autonomous-timeout-ms` is not passed. For context,
+the measured runs used 43.5–56.2 K tokens each (above), so treat the token flag as advisory.
+
+**Designed but not built:** a per-day incident budget alarm in `worker.py` (e.g. 500
+incidents/day ⇒ pause the queue and page someone). Today nothing caps total daily spend except
+the per-incident timeout and the rule engine's cooldowns, which limit how often one rule can fire
+for the same tracks.
 
 ## 3. Portfolio Demo Hosting ($0/mo pattern)
 
 "Simulated live": run heavy inference locally once; dump tracklets/telemetry to timestamped
 fixtures; cloud backend replays them over WebSockets on demand. "Trigger Incident Audit" is an
 on-demand agent call: fractions of a cent per click.
+
+**As built (M6):** the replay half exists and runs at $0 locally. `make replay-up`
+(`scripts/replay_demo.py` + `docker/docker-compose.replay.yml`) replays the 30 hand-labeled
+fixtures into the real Postgres/API/WebSocket path with no GPU and no LLM call. It is **not
+hosted anywhere**, the free-tier hosting in the table below was never set up, and the on-demand
+"Trigger Incident Audit" button was not built. The table is the plan for hosting it.
 
 | Component | Tool | Cost |
 | --- | --- | --- |

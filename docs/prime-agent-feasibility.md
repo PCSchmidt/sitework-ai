@@ -10,6 +10,17 @@ Docker container, processing live incident events?
 evidence-based analysis. Verified against the installed Prime Agent package
 (`prime-agent` npm distribution, inspected directly).
 
+> **How it turned out (added 2026-09-26).** Spike-01 returned a Conditional GO, and the
+> integration shipped on **Tier B (RPC mode)**, but in a simpler shape than §3 proposes:
+> `agent/prime_adapter.py` starts a fresh `prime-agent --mode rpc --no-session` process per
+> incident rather than one long-lived process, and sends one prompt. Of §1's four capabilities,
+> **#1 (the persistent REPL) is the one the system depends on and was verified**: the agent
+> computes distances and velocities by running Python against `tracks.jsonl`. #2 (explicit
+> `rlm()` sub-agent orchestration), #3 (continual harness state), and #4's tier routing were not
+> used. The fallback worker (`agent/worker_fallback.py`) stayed a stub because the spike passed.
+> Upstream is [PrimeIntellect-ai/prime-agent](https://github.com/PrimeIntellect-ai/prime-agent);
+> this project runs v0.9.3 (upstream was at 0.9.6 on 2026-09-26).
+
 ---
 
 ## 1. What Makes Prime Agent Uniquely Suited Here
@@ -158,7 +169,12 @@ differentiator, not a single point of failure. This is recorded as ADR-005.
 
 ## 6. Why It's Worth It (portfolio framing)
 
-A reviewer sees: "the agent that built the system is also the reasoning component of the system,
-running headless in a container, computing its own verification math in a sandboxed REPL." That is
-a rare, concrete demonstration of agentic systems engineering — agent-as-infrastructure, not
-agent-as-chatbot. The RPC contract and budget flags make it defensible as engineering, not novelty.
+A reviewer sees an agent running headless in a container as a component of the application,
+computing its own verification math in a sandboxed REPL, with the application (not the agent)
+deciding whether to trust the answer. That is a concrete demonstration of agentic systems
+engineering: agent-as-infrastructure, not agent-as-chatbot. The RPC contract, the external
+timeout, and the Band-3 recomputation gate make it defensible as engineering, not novelty.
+
+(An early framing here said "the agent that built the system is also its reasoning component."
+That didn't turn out to be true: the codebase was built with the help of Claude Code, and Prime
+Agent is the runtime reasoning component only.)

@@ -1,387 +1,511 @@
-# SiteWatch AI — hybrid deterministic/probabilistic industrial safety intelligence
+# SiteWatch AI — computer vision safety monitoring, verified by a Recursive Language Model
 
-**Status: complete (M0–M6), no live deployment.** This is a local-stack portfolio
-project — `make up` runs the full system (camera simulation, detection/tracking, rule
-engine, agent, API, live dashboard) on your machine via Docker Compose; there is
-no hosted demo URL and none is planned (ADR-004: documentation-only cloud deployment —
-three fully-specified Terraform stacks for AWS/GCP/Azure exist, validate in CI, and are
-realized down to real resources — Fargate/SQS/EFS/Aurora/S3, Cloud Run/Pub/Sub/Filestore/
-Cloud SQL, Container Apps/Service Bus/Files/PostgreSQL — but none is applied to a live
-account). **M0–M6 are closed.** Milestone history and the known, disclosed gaps are
-in [docs/12-roadmap.md](docs/12-roadmap.md).
+**Status: complete (milestones M0–M6), local-only portfolio project.** There is no hosted demo
+URL. Everything runs on your own machine with Docker, and a fresh clone can have the dashboard
+running with one command (see [Quickstart](#quickstart)). Build history and every known gap:
+[docs/12-roadmap.md](docs/12-roadmap.md).
 
-![SiteWatch AI dashboard in replay mode: the live incident feed filling in, a
-needs_review incident showing why the Band-3 gate rejected it, and a confirmed violation
-with its narrative and recommended actions](docs/assets/demo.gif)
+![SiteWatch AI dashboard in replay mode: the live incident feed filling in, a needs_review
+incident showing why the verification gate rejected it, and a confirmed violation with its
+narrative and recommended actions](docs/assets/demo.gif)
 
-*The dashboard running `make replay-up`: no GPU, no LLM call. The 30 hand-labeled example
-incidents are replayed into the real database/API/WebSocket path every few seconds (sped up
-to one every 3s for this recording). Replayed narratives are tagged `[REPLAY DEMO]`, and
-replay mode has no video, so "No clip captured" is the expected evidence state here.*
+*The dashboard running `make replay-up`: no GPU, no AI call. Thirty hand-labeled example
+incidents are replayed into the real database, API, and live-update path (sped up to one every
+3 s for this recording). Replayed narratives are tagged `[REPLAY DEMO]`, and replay mode has no
+video, so "No clip captured" is the expected evidence state.*
 
 ## What is this? (plain-language overview)
 
-SiteWatch AI answers an operational question warehouses and construction sites actually
-have: *is a worker about to be hit by a forklift, has someone entered an exclusion zone
-too long, is a vehicle over the site speed limit — and when something ambiguous happens,
-what actually occurred?* It watches simulated camera feeds (MP4 clips looped as RTSP),
-detects and tracks people and vehicles, projects every detection onto a metric ground
-plane, and evaluates deterministic spatial safety rules in real time. Only the anomalies
-that pass those rules go to an LLM agent, which re-verifies the kinematics by executing
-code against the raw tracklet data — not by re-describing what the fast path already
-claimed — before anything is recorded as a confirmed incident.
+Warehouses and construction sites mix heavy machinery with people on foot. Most serious
+accidents there come down to three situations: a forklift gets too close to a worker, someone
+stands too long inside a hazard zone (like an excavator's swing radius), or a vehicle moves too
+fast. SiteWatch AI is a prototype of software that watches ordinary security-camera video and
+catches those situations automatically, then produces an auditable record of what actually
+happened.
 
-The architectural idea — and the portfolio centerpiece — is the **dual-plane split**:
+It does that in four steps:
 
-> Fast path (deterministic, ≤100ms/frame, zero LLM cost): decode → YOLO11 detect →
-> ByteTrack → Kalman → homography → Shapely zone/rule engine → `TriggerEvent`.
-> Slow path (event-driven, seconds): a containerized agent worker re-derives the claimed
-> kinematics from the same raw data and either confirms the incident or flags it for
-> human review — it never trusts the fast path's numbers without checking them.
+1. **See.** A computer vision model finds every person and vehicle in each video frame and
+   follows each one from frame to frame.
+2. **Measure.** A one-time camera calibration converts positions on screen (pixels) into
+   positions on the floor (meters), so "2.3 m apart" means 2.3 real meters.
+3. **Decide.** Fixed, written-down safety rules check those measurements every frame: *forklift
+   within 3 m of a person for 2 s*, *person in the swing zone for 3 s*, *vehicle over 2.2 m/s in
+   the dock*.
+4. **Verify.** When a rule fires, an AI agent re-checks the event by recomputing the distances
+   and speeds from the raw tracking data, classifies it (violation, near-miss, normal operations,
+   or false positive), and the result lands on a live dashboard.
 
-The thing that makes it more than "YOLO plus an LLM wrapper":
+**What's real and what's simulated.** There is no real site and no live camera. The "cameras"
+are short stock video clips from [Pexels](https://www.pexels.com/), played on a loop so the
+software sees them exactly as it would a live network camera. The computer vision, the
+measurements, the rules, the AI verification, the database, and the dashboard are all real,
+working code.
 
-- **A hard, machine-checked boundary between the two planes.** Every value that crosses
-  from vision code to the agent is a Pydantic v2 schema (`pipelines/schemas/models.py`) —
-  `TrackletFrame`, `TriggerEvent`, `KinematicsVerdict`, `IncidentRecord`. Calibration has
-  a hard numeric gate (`rms_px ≤ 2.0`, docs/04 §3): a camera that fails it doesn't get
-  approximate metric rules, it degrades to zone-only geofencing rather than silently
-  reporting wrong distances.
-- **A recomputation gate the agent cannot talk its way past (Band-3).** `agent/band3.py`
-  independently recomputes min-distance/closing-velocity from the stored tracklet window
-  using the same math the fast path used, and rejects the incident — `state=needs_review`,
-  raw evidence retained, nothing silently dropped — if either the fast path's own claim or
-  the agent's verified answer falls outside tolerance (docs/06 §3).
-- **The agent's own budget flags turned out not to be enough, so the code doesn't trust
-  them alone.** A real feasibility spike found `--autonomous-max-turns` did not stop a
-  runaway task (9 turns / 130+s against a limit of 3) — `agent/prime_adapter.py`'s
-  external wall-clock timeout, not the CLI flag, is what actually enforces the budget.
-  That's the kind of finding this project is built to surface and document, not hide.
-- **Real per-camera calibration, done honestly.** Both calibration methods (point-
-  correspondence homography and single-view-metrology from vanishing points) are
-  validated against real phone footage, not just synthetic fixtures — including catching
-  and fixing two real bugs (a vanishing-point sign ambiguity, an overly strict rotation
-  tolerance) that only showed up on noisy real-world data.
+## The big idea: two planes, and a referee between them
+
+Safety software usually picks one of two designs, and each has a serious flaw:
+
+- **Pure rules** (classic computer vision + hand-set thresholds) are fast, cheap, and
+  predictable, but they can't tell a genuine near-miss from a tracking glitch or harmless
+  normal work, so they drown operators in false alarms.
+- **Pure AI** (send the video or the data to a large language model and ask what happened) can
+  reason about context, but it's slow, expensive to run on every frame, and can state numbers
+  that sound confident and are simply wrong. That's unacceptable when the question is "how
+  close did the forklift get?"
+
+SiteWatch AI splits the work into **two planes** so each one does only what it's good at, and
+puts a piece of plain code between them that neither can override.
+
+| | Fast plane: deterministic computer vision | Slow plane: Prime Agent (Recursive Language Model) |
+| --- | --- | --- |
+| **Job** | watch every frame; measure; apply the safety rules | verify each rule firing and classify what happened |
+| **Runs** | continuously, on every frame of every camera | only when a rule fires (rare) |
+| **Speed** | milliseconds per frame | about a minute per incident |
+| **Cost** | no AI cost at all | fractions of a cent per incident |
+| **Nature** | *deterministic*: the same input always gives the same output | *probabilistic*: a language model, so its answers must be checked |
+| **Built from** | YOLO11s, ByteTrack, a Kalman filter, homography, Shapely geometry | [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent), driven headless |
+
+The only thing that crosses from one plane to the other is a small, strictly validated data
+packet (a `TriggerEvent`) plus the few seconds of tracking data around it. The AI never sees raw
+video.
+
+### Why a Recursive Language Model for the slow plane
+
+A normal LLM agent gets its data pasted into the conversation and answers in prose. Asked "how
+close did track 42 get to track 77 across these 50 frames?", it has to read numbers off the page
+and estimate, which is exactly where language models make things up.
+
+[Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent) is Prime Intellect's open-source
+agent built on the **[Recursive Language Model (RLM)](https://www.primeintellect.ai/blog/rlm)**
+idea. In their words, an RLM *"treats context as variables … and tools like recursive subagents
+as function calls … inside a persistent REPL."* In plain terms: the model works inside a live Python
+session. The data sits there as files and variables it can load, and the model's way of
+answering is to write and run code, calling further model instances like functions when a
+problem needs splitting up.
+
+That is precisely the shape this verification job needs. SiteWatch gives the agent the trigger
+and the raw tracking file, and instructs it to answer only from code it actually executes. So the
+agent doesn't *say* the minimum distance was 0.7 m; it loads `tracks.jsonl`, computes the
+distance between the two tracks in every frame, finds the minimum, and writes the result as JSON.
+In the feasibility spike it did exactly that on every run, and twice it noticed on its own that
+the fast plane's claimed distance didn't match its recomputation.
+
+**Precisely what's used.** This project uses Prime Agent's persistent REPL (code-executed
+verification), its headless JSON-lines RPC mode, and its per-session token accounting. One
+verification role runs per incident. Prime Agent's other headline feature, the *Continual
+Harness* (reusable sub-agent specs and memories that persist across sessions), and explicit
+multi-agent orchestration were part of the original design but not built;
+[docs/05](docs/05-agent-orchestration.md) spells out the difference.
+
+### The referee: the Band-3 gate
+
+Letting an AI compute the answer is better than letting it guess, but it still isn't proof. So
+before anything is recorded, `agent/band3.py`, which is plain deterministic code, recomputes the
+key numbers itself from the same tracking data. It checks both the fast plane's claim and the
+agent's answer against its own recomputation (within 0.15 m for distance, 0.2 m/s for speed, or
+5%).
+
+- **Everything agrees** → the incident is stored as `confirmed`.
+- **Anything disagrees**, or the agent times out, crashes, or writes malformed output → the
+  incident is stored as `needs_review`, with the reason and all the evidence kept for a person to
+  decide. Nothing is silently dropped, and the AI has no way to talk its way past the gate.
+
+(The name comes from the design's three "bands": deterministic perception, probabilistic
+reasoning, and deterministic gates on the reasoning's output.)
+
+```mermaid
+flowchart TD
+    CAM["Camera feed<br>stock clips looped as live RTSP streams"]
+    subgraph fast["Fast plane — deterministic computer vision, every frame, no AI cost"]
+        DET["See<br>YOLO11s detects people and vehicles · ByteTrack follows each one"]
+        GEO["Measure<br>calibration turns pixels into meters on the floor"]
+        RULE["Decide<br>proximity · hazard-zone dwell · speed rules"]
+    end
+    TRIG["TriggerEvent + evidence window<br>the only data that crosses planes — never raw video"]
+    subgraph slow["Slow plane — Prime Agent RLM, only when a rule fires"]
+        RLM["Verify by computing<br>loads the raw tracks into its Python REPL<br>runs code for distance, closing speed, time-to-collision"]
+        VERD["Classify<br>violation · near-miss · normal ops · false positive"]
+    end
+    GATE["Band-3 gate — plain code, not AI<br>recomputes the numbers itself and compares"]
+    OK[("Confirmed incident")]
+    HR[("Needs human review<br>reason + evidence kept, nothing dropped")]
+    DASH["Live dashboard<br>incident feed · review queue · evidence"]
+
+    CAM --> DET
+    DET --> GEO
+    GEO --> RULE
+    RULE -->|rule fires| TRIG
+    TRIG --> RLM
+    RLM --> VERD
+    VERD --> GATE
+    GATE -->|numbers agree| OK
+    GATE -->|mismatch, timeout, or bad output| HR
+    OK --> DASH
+    HR --> DASH
+```
+
+### What this gets you
+
+- **The safety decision stays deterministic.** Whether a rule fires is decided by geometry and
+  arithmetic, identically every time. The AI only works downstream of that decision, and a
+  failed or wrong AI answer becomes a `needs_review` incident, never a lost one.
+- **AI cost scales with incidents, not video.** The agent runs only on rule firings. Measured
+  cost was about $0.002 per incident.
+- **Every record can be audited.** A confirmed incident carries the verified numbers, the rule
+  it broke, a written narrative, and links to the exact tracking data it was checked against.
+
+## At a glance
 
 | | |
 | --- | --- |
-| Deployment | Local only, `docker compose up` (mediamtx + redis + postgres + api + ui + vision workers + agent) |
-| Fast path | YOLO11s (Ultralytics) + ByteTrack, homography/vanishing-point calibration, Shapely zone engine, deterministic rule engine (proximity, zone-dwell, speed) |
-| Slow path | [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent) — Prime Intellect's open-source [RLM](https://www.primeintellect.ai/blog/rlm) (Recursive Language Model) agent — driven headless over a JSON-lines RPC protocol; per-incident trajectory-verification prompt; Band-3 recomputation gate |
-| Delivery plane | FastAPI REST + WS (`api/`), React dashboard (`ui/`) — live incident feed, needs_review queue with a working review action, KPI bar, evidence viewer (clip playback + tracks.jsonl), shift-report rendering; verified against the real running stack including the WS push through the exact proxy path a browser uses |
-| Broker | Redis Streams, time-based retention (`XTRIM MINID`), consumer groups for crash-safe agent consumption |
-| Schemas | Pydantic v2, single source of truth, JSON Schema exported for the dashboard |
-| Benchmark (M1/M5) | YOLO11s @ 35 FPS single-stream 1080p, RTX A4500 (spike-00, clean boot); TensorRT FP16 export closed a real M1/M2 doc/reality gap — 34-57% single-stream speedup, and 3-stream FP16 clears the ≥25 FPS/stream floor (30.2 FPS min-stream) under idle-recovered conditions, 9.5-13.2 FPS/stream under sustained thermal load — both published, not just the best case (`docs/benchmarks.md`) |
-| Agent eval (M5) | 30 hand-labeled incidents run against the real `prime-agent` CLI: **86.7% raw validation pass** (all 4 misses were one external timeout, not a capability failure — 100% once retested with the evidence-based recalibrated timeout), **82.1% classification agreement** — [docs/eval-m5-agent-slow-path.md](docs/eval-m5-agent-slow-path.md) |
-| Reference cloud architecture (M6) | Real, validated Terraform for AWS (ECS Fargate/SQS/EFS/Aurora/S3), GCP (Cloud Run/Pub/Sub/Filestore/Cloud SQL), and Azure (Container Apps/Service Bus/Files/PostgreSQL) — `fmt`/`validate` green in CI (`iac-check.yaml`), never applied (ADR-004) |
-| Tests | 157 total (130 passing offline, 27 integration tests gated on a real Postgres — green in CI, skip cleanly without one locally); a golden-session contract test replays a real captured agent RPC transcript so CI doesn't need the (currently non-public) `prime-agent` package |
-| Honest scope | portfolio project; simulated camera feeds (looped demo clips, not live cameras); real per-camera calibration for the three named demo cameras is still open — only a personal-footage fixture has been calibrated end-to-end so far; video+boxes overlay/2D site canvas not built (needs `frame.ticker`, still unwired) |
+| Runs on | Your machine via Docker Compose. `make replay-up` needs only Docker; the full video pipeline also needs an NVIDIA GPU |
+| Fast plane | YOLO11s (Ultralytics) + ByteTrack + Kalman filter; homography and vanishing-point calibration; Shapely zones; rule engine for proximity, zone dwell, and speed |
+| Slow plane | [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent) v0.9.3 (RLM), headless over JSON-lines RPC, one fresh process per incident, 210 s external timeout |
+| Verification | Band-3 recomputation gate; Pydantic v2 schemas on everything crossing the planes |
+| Delivery | Postgres, FastAPI (REST + WebSocket), React dashboard: live incident feed, `needs_review` queue with a review form, KPI bar, evidence viewer, shift report |
+| Detection speed | YOLO11s 35 FPS single-stream at 1080p on an RTX A4500 laptop GPU; 3 streams reach 30.2 FPS each with TensorRT FP16 on a rested GPU, 9.5–13.2 under sustained heat ([benchmarks](docs/benchmarks.md)) |
+| Agent accuracy | 30 hand-labeled incidents against the real Prime Agent: 86.7% first-pass (all misses were timeouts; 100% after recalibrating the timeout), 82.1% classification agreement ([eval](docs/eval-m5-agent-slow-path.md)) |
+| Agent cost | ~43–56 K tokens and ~$0.002 per incident on a GLM-Flash-class model |
+| Cloud | Validated Terraform for AWS, GCP, and Azure (`fmt`/`validate` in CI), deliberately never applied ([ADR-004](docs/adr/ADR-004-documentation-only-cloud-deployment.md)) |
+| Tests | 157: 130 run offline, 27 run against a real Postgres (in CI) |
 
 ## Architecture at a glance
 
 ```mermaid
 flowchart TD
-    SRC["MediaMTX<br>looped demo clips as simulated RTSP cameras"] --> DET
-    subgraph fast["Fast path — deterministic, every frame, zero LLM cost"]
-        DET["YOLO11s detector<br>+ ByteTrack / Kalman tracker"] --> GEOM["pipelines/geometry<br>homography / vanishing-point calibration"]
-        GEOM --> RULES["Shapely zone engine + RuleEngine<br>proximity · zone_intrusion · speed"]
+    subgraph ingest["Ingestion — simulated cameras"]
+        CLIPS["Pexels stock clips<br>1080p transcodes, pinned by SHA-256"]
+        MTX["MediaMTX<br>loops each clip as a live RTSP stream"]
     end
-    RULES --> BROKER[("Redis Streams<br>tracklets · trigger_events")]
-    RULES --> EVID["EvidenceCapture<br>tracks.jsonl + clip.mp4"]
-    BROKER --> WORKER
-    subgraph slow["Slow path — event-driven, on trigger only"]
-        WORKER["agent/worker.py<br>consumer-group queue dispatcher"] --> ADAPTER["agent/prime_adapter.py<br>RPC driver, external timeout+kill"]
-        ADAPTER --> PA["Prime Agent (RLM)<br>verifies kinematics via code execution"]
-        PA --> GATE["agent/band3.py<br>independent recomputation cross-check"]
+    subgraph fastplane["Fast plane — one GPU container per camera"]
+        VIS["pipelines/vision/pipeline.py<br>YOLO11s · ByteTrack · Kalman"]
+        GEOM["pipelines/geometry<br>homography px → meters · Shapely zones"]
+        RULES["pipelines/vision/rules.py<br>proximity · zone_intrusion · speed · cooldowns"]
+        EVID["pipelines/vision/evidence.py<br>tracks.jsonl + clip.mp4 around each trigger"]
     end
-    GATE --> REC[("IncidentRecord<br>confirmed / needs_review")]
-    REC --> API["api/main.py<br>REST + WS, Postgres LISTEN/NOTIFY"]
-    API --> UI["React dashboard<br>incident feed · needs_review queue · evidence viewer"]
+    REDIS[("Redis Streams<br>tracklets per camera · trigger_events<br>consumer groups, time-based retention")]
+    VOL[("Shared workspace volume<br>incidents/{event_id}/")]
+    subgraph slowplane["Slow plane — agent container"]
+        WORK["agent/worker.py<br>crash-safe queue consumer"]
+        ADAPT["agent/prime_adapter.py<br>JSON-lines RPC · 210 s timeout + kill"]
+        PA["Prime Agent (RLM)<br>Python REPL computes the kinematics<br>writes result.json"]
+        B3["agent/band3.py<br>independent recomputation gate"]
+    end
+    PG[("Postgres<br>incidents · reviews · agent_runs<br>NOTIFY trigger on change")]
+    API["api/main.py<br>FastAPI REST + WebSocket push"]
+    UI["ui/ React dashboard<br>feed · review queue · evidence · KPIs"]
+    REPLAY["scripts/replay_demo.py<br>$0 demo: replays 30 labeled fixtures<br>no GPU, no AI call"]
+
+    CLIPS --> MTX
+    MTX -->|RTSP| VIS
+    VIS --> GEOM
+    GEOM --> RULES
+    VIS -->|tracklets| REDIS
+    RULES -->|TriggerEvent| REDIS
+    RULES --> EVID
+    EVID --> VOL
+    REDIS --> WORK
+    VOL --> WORK
+    WORK --> ADAPT
+    ADAPT --> PA
+    PA --> B3
+    B3 -->|confirmed or needs_review| PG
+    PG -->|NOTIFY| API
+    VOL -->|evidence, read-only| API
+    API --> UI
+    REPLAY -.->|same write path| PG
 ```
+
+More diagrams (C4 context and container views, and step-by-step sequence diagrams for a real
+incident and for replay mode): [docs/13-architecture-diagrams.md](docs/13-architecture-diagrams.md).
 
 Where things live:
 
 | Path | What it is |
 | --- | --- |
-| `pipelines/ingestion/` | MP4→RTSP simulation config (MediaMTX), frame source |
-| `pipelines/vision/` | `detector.py`, tracker, `rules.py` (the fast-path rule engine), `pipeline.py` (frame loop), `evidence.py` (trigger evidence capture) |
-| `pipelines/geometry/` | `homography.py` (DLT point-correspondence), `vanishing_point.py` (single-view metrology), `calibrate.py` (CLI tool, both methods), `zones.py` |
-| `pipelines/broker/` | Redis Streams retention (`XTRIM MINID`) + consumer-group hardening, replay tooling |
-| `pipelines/schemas/` | Pydantic v2 single source of truth for everything crossing the fast/slow boundary |
-| `agent/worker.py` | Queue dispatcher: pops `TriggerEvent`s, writes incident payload files, drives the agent, applies the Band-3 gate |
-| `agent/prime_adapter.py` | The only module allowed to invoke `prime-agent`; external wall-clock timeout+kill on every prompt |
-| `agent/band3.py` | Recomputation cross-check gate (docs/06 §3) |
-| `agent/prompts/` | Per-incident prompt templates (trajectory verification, generic classification) |
-| `evaluation/` | `build_seed_incidents.py` + `agent_eval.py` (the 30-fixture agent eval set/runner), `benchmark_models.py` (fast-path FPS/latency/VRAM, multi-stream + precision matrix), `eval_tracking.py` (MOTA/IDF1 against MOT17) |
-| `api/` | FastAPI REST + WS, real Postgres-backed persistence (`repository.py`), evidence-serving endpoints, shift-report rendering (`reports.py`) |
-| `ui/` | React dashboard — incident feed with live WS updates, needs_review queue + review form, KPI bar, evidence viewer |
-| `deploy/terraform/` | Real, validated Terraform for AWS/GCP/Azure (`environments/{aws,gcp,azure}/`) — authored and `fmt`/`validate`-checked, never applied (ADR-004) |
-| `config/` | `cameras.yaml`, `zones.yaml`, `rules.yaml` — the deterministic rule configuration |
-| `docs/` | The full design suite: architecture, schemas, security, cost model, risk register, ADRs, spike reports, cloud deployment guides |
-| `tests/` | 157 tests: schema round-trips, rule-engine known-answer tests, calibration math, broker hardening, agent/adapter plumbing against a scripted stand-in, the golden-session contract replay, replay-mode fixture recomputation, and (integration, Postgres-gated) API/repository/persistence round-trips |
-| `.github/workflows/` | `ci.yaml` (lint/type/test/schema-compat, Python + React), `contract-agent.yaml` (golden RPC replay), `iac-check.yaml` (`terraform validate` for all three clouds, never applied) |
+| `pipelines/vision/` | `pipeline.py` (the per-camera frame loop), `detector.py`, `rules.py` (the rule engine), `evidence.py` (captures the tracking window around each trigger) |
+| `pipelines/geometry/` | `homography.py` (pixels → meters from measured points), `vanishing_point.py` (calibration from parallel lines, when no measured points exist), `calibrate.py` (CLI for both), `zones.py` |
+| `pipelines/broker/` | Redis Streams retention, consumer groups, replay tooling |
+| `pipelines/schemas/` | Pydantic v2 models for everything crossing the planes: `TrackletFrame`, `TriggerEvent`, `KinematicsVerdict`, `IncidentRecord` |
+| `agent/worker.py` | Pops each `TriggerEvent`, prepares the incident files, drives the agent, applies the gate, persists the result |
+| `agent/prime_adapter.py` | The only module allowed to start `prime-agent`; enforces the external timeout |
+| `agent/band3.py` | The recomputation gate |
+| `agent/prompts/` | The per-incident prompts the agent receives |
+| `api/` | FastAPI app, Postgres schema and queries, evidence endpoints, shift-report renderer |
+| `ui/` | React + Vite dashboard |
+| `config/` | `cameras.yaml`, `zones.yaml`, `rules.yaml`, `calibration/`: the whole deterministic rule setup |
+| `evaluation/` | The 30-incident agent eval (fixtures + runner), the detection benchmark, MOTA/IDF1 tracking eval |
+| `scripts/` | `replay_demo.py`, `smoke_test.py`, `record_golden_session.py`, `check_docs.py` |
+| `docker/` | Dockerfiles, `docker-compose.yml` (full stack), `docker-compose.replay.yml` ($0 demo) |
+| `deploy/terraform/` | AWS / GCP / Azure reference environments, validated, never applied |
+| `data/manifests/` | Where every clip, dataset, and weight file came from, its license, and its hash |
+| `docs/` | The design suite: architecture, schemas, security, cost, risks, ADRs, spikes, evals, runbooks |
 
 ## Quickstart
 
-Requires Docker, [uv](https://docs.astral.sh/uv/) (Python 3.11+), and — only if you want
-to run the real agent slow path, not just the fast path — a working local install of
-[`prime-agent`](https://github.com/PrimeIntellect-ai/prime-agent) (not yet on the public
-npm registry; see `docker/vendor/README.md` for the current vendoring workaround).
+### 1. See it running (Docker only, about 5 minutes the first time)
 
 ```bash
 git clone https://github.com/PCSchmidt/sitework-ai
 cd sitework-ai
-uv sync
-uv run pytest              # 130 offline tests; +27 more against a real Postgres
-
-make up                    # docker compose up --build: full local stack,
-                            # simulated camera feeds, live dashboard at :5173
-make calib                 # launch the manual camera-calibration CLI
-make agent-eval            # run the seeded incident set against the real prime-agent CLI
-make tracking-eval         # MOTA/IDF1 against the MOT17 mirror
-make eval                  # fast-path benchmark harness (single/multi-stream, FP32/FP16)
-
-make replay-up             # $0 public demo stack: postgres + api + ui + fixture replay,
-                            # no GPU/LLM call in the loop (docs/12 M6). Dashboard at :5173
-                            # populates from the 30 seeded fixtures, not live cameras.
+make replay-up
 ```
+
+Open **<http://localhost:5173>**. Incidents appear every 15 seconds and the counters climb. Click
+**Needs review** to see incidents the gate rejected and why; click any `confirmed` incident for
+its verified numbers and narrative. Stop it with `make replay-down` (or Ctrl+C).
+
+No `make`? Run `docker compose -f docker/docker-compose.replay.yml up --build` instead. This
+path was tested from a fresh clone on 2026-09-26.
+
+### 2. Run the tests (Python 3.11+ and [uv](https://docs.astral.sh/uv/))
+
+```bash
+uv sync                # note: pulls CUDA-enabled PyTorch, a multi-GB download
+uv run pytest          # 130 tests offline; 27 more run when TEST_DATABASE_URL points at Postgres
+```
+
+### 3. Run the full pipeline on video (NVIDIA GPU required)
+
+The full stack runs the real detector on the looping clips and drives the real agent. It needs
+setup a fresh clone doesn't have, because clips, weights, and the agent package aren't in git:
+
+1. **GPU:** an NVIDIA GPU, with the NVIDIA Container Toolkit so Docker can use it.
+2. **Demo clips:** download the three clips and make their 1080p versions, per
+   [assets/clips/README.md](assets/clips/README.md).
+3. **Detector weights:**
+   `curl -L -o data/models/yolo11s.pt https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt`
+   (the hash to check is in [data/manifests/yolo11-weights.yaml](data/manifests/yolo11-weights.yaml)).
+4. **Prime Agent:** a working local install with a model provider configured in `~/.prime`, and
+   its package vendored for the container, per [docker/vendor/README.md](docker/vendor/README.md).
+   It isn't on the public npm registry.
+5. `make up`, then open <http://localhost:5173>.
+
+**Important:** until the three demo cameras are calibrated (see
+[Limitations](#limitations)), this stack will detect and track people and vehicles in the clips
+but won't fire safety rules on them. The incident pipeline itself has been exercised through the
+eval fixtures, the smoke test (`scripts/smoke_test.py`), and replay mode.
+
+Other entry points: `make calib` (camera calibration CLI), `make agent-eval` (the 30-incident
+eval against the real agent), `make eval` (detection benchmark), `make tracking-eval` (MOTA/IDF1).
 
 ## Approach: why it is built this way
 
-- **Deterministic first, LLM only on ambiguity.** Every safety-critical alert (proximity,
-  zone dwell, speed) fires from documented, versioned geometric math — zero LLM cost, zero
-  hallucination surface. The agent only ever runs on triggers the deterministic layer
-  already raised, and re-derives its own answer from raw data rather than trusting the
-  trigger's summary.
-- **The gate is structural, not prompted.** `agent/band3.py` doesn't ask the model to
-  double-check itself — it independently recomputes the same numbers from `tracks.jsonl`
-  and compares both the fast path's claim and the agent's claim against that recompute.
-  Either one drifting outside tolerance rejects the incident to `needs_review`.
-- **Calibration has a hard numeric floor, and degrades honestly.** `rms_px ≤ 2.0` is not a
-  suggestion — a camera that fails it keeps zone-intrusion detection (geometric
-  containment tolerates imprecision) but proximity/speed rules that need real metric
-  distance go inert rather than reporting a number nobody verified.
-- **Real footage before real cameras.** Rather than guess at calibration math against
-  synthetic data alone, both calibration methods were run against actual phone footage —
-  which caught two real implementation bugs synthetic tests hadn't surfaced (see
-  `docs/12-roadmap.md`'s M2 notes).
-- **The agent's own safety rails were tested, not assumed.** A dedicated feasibility spike
-  (`docs/spikes/spike-01-prime-agent-headless.md`) found a real gap in `prime-agent`'s own
-  budget-enforcement flags and changed the design in response — external timeout
-  ownership moved into `agent/prime_adapter.py` rather than staying a documentation
-  assumption.
-- **Everything that can be tested against the real system, is.** The M3 agent eval set
-  runs against the actual `prime-agent` CLI (not a mock); the CI contract test replays a
-  real captured RPC transcript rather than a synthetic one, because `prime-agent` isn't
-  installable in CI yet (see Limitations).
+- **Deterministic first, AI only where judgment helps.** Every rule is documented, versioned
+  geometry in `config/`. The agent only ever looks at events the rules already raised, and it has
+  to re-derive its answer from raw data rather than trust the trigger's numbers.
+- **The gate is structural, not a prompt.** Asking a model to "double-check itself" isn't a
+  control. `agent/band3.py` recomputes independently and rejects on disagreement.
+- **Calibration has a hard floor and fails safe.** A camera whose calibration error exceeds
+  2.0 px keeps zone detection (containment tolerates small errors) but its distance and speed
+  rules switch off rather than report numbers nobody can trust.
+- **Tested against reality, not just synthetic data.** Both calibration methods were run on real
+  phone footage, which exposed two bugs synthetic tests had missed. The agent was evaluated
+  against the real Prime Agent CLI, not a mock.
+- **The agent's own safety rails were tested, not assumed.** A feasibility spike found Prime
+  Agent's `--autonomous-max-turns` flag didn't stop a runaway task (9 turns and 130+ s against a
+  limit of 3). So the real limit lives in this repo's adapter as an external timeout and kill.
+- **Negative results get published.** Benchmarks report the thermally throttled numbers next to
+  the best case; the eval reports the raw 86.7% alongside the timeout-adjusted 100%.
 
 ## Motivation
 
-Warehouse and construction-site safety systems either stop at "an alert fired" — no
-verification, no audit trail, no explanation of what actually happened — or they route
-everything through an LLM and inherit its unreliability for decisions that matter. This
-project is a demonstration of the middle path: keep the safety-critical layer
-deterministic and auditable, and use a reasoning agent only where judgment is genuinely
-needed (was this really a near-miss? does the claimed kinematics hold up?) — with a
-recomputation gate the agent cannot bypass no matter how confident it sounds.
+Site-safety systems tend to fail in one of two ways. Some stop at "an alert fired", with no
+verification, no audit trail, and no explanation. Others route everything through an LLM and
+inherit its unreliability for decisions that matter. This project demonstrates a middle path:
+keep the safety-critical layer deterministic and auditable, use a reasoning agent only where
+judgment genuinely helps (was this really a near-miss?), make that agent compute rather than
+assert, and put a recomputation gate behind it that it can't bypass.
 
-**This is a portfolio project.** All camera feeds are looped demo clips, not live site
-cameras; the cloud deployment story (ADR-004) is documentation-and-Terraform-only, never
-applied to a live account.
+It's also a working test of a specific question: can an RLM agent like Prime Agent run as a
+headless, containerized *component* of an application, rather than as a chat assistant? The
+answer from this build is yes, with named caveats
+([spike-01](docs/spikes/spike-01-prime-agent-headless.md)).
 
 ## Method (what the pipeline actually does)
 
-1. **Ingest.** MediaMTX loops pinned demo clips as RTSP streams, one per simulated camera
+1. **Ingest.** MediaMTX loops each 1080p demo clip as an RTSP stream, one per simulated camera
    (`config/cameras.yaml`).
-2. **Detect and track.** YOLO11s detects people/vehicles per frame; ByteTrack + a Kalman
-   filter maintain per-camera track identity and state.
-3. **Project to the ground plane.** If a calibration exists for the camera
-   (`pipelines/geometry/calibrate.py`, either point-correspondence or vanishing-point
-   method), each track's bottom-center pixel is projected to `ground_point_m` through the
-   homography; zone membership (`pipelines/geometry/zones.py`, Shapely) is computed
-   whenever *any* calibration exists — metric velocity/speed only when it clears the hard
-   RMS gate.
-4. **Evaluate deterministic rules.** `pipelines/vision/rules.py`'s `RuleEngine` evaluates
-   proximity (pairwise distance + duration + closing speed), zone_intrusion (dwell timer),
-   and speed (instantaneous, zone-gated) rules with cooldown-based dedup, and emits a
-   `TriggerEvent` on any rule condition holding for its configured threshold.
-5. **Capture evidence.** `pipelines/vision/evidence.py` keeps a rolling buffer of recent
-   `TrackletFrame`s and, on a trigger, writes the pre/post-trigger window to
-   `tracks.jsonl` + `clip.mp4` — exactly the data the slow path re-verifies against.
-6. **Dispatch to the agent.** `agent/worker.py` pops the `TriggerEvent` off a Redis
-   consumer group (crash-safe: an unacked entry gets reclaimed, never silently dropped),
-   writes the incident payload files, and drives one `prime-agent` RPC session with a
-   role-specific prompt — pairwise-distance verification for proximity triggers, a
-   simpler sanity-check prompt for zone/speed triggers.
-7. **Verify, don't trust.** The agent must execute real code against `tracks.jsonl` to
-   answer — no eyeballing, no estimating — and writes `result.json` (`KinematicsVerdict`
-   schema). `agent/band3.py` independently recomputes the same numbers and rejects on
-   mismatch against either the fast path's or the agent's claim.
-8. **Record.** Pass → `IncidentRecord` with `state=confirmed`. Fail (schema-invalid,
-   Band-3 mismatch, agent timeout/crash) → `state=needs_review`, `rejection_reason` set,
-   raw evidence retained for a human reviewer — never a silently dropped or fabricated
-   classification. `agent/persistence.py`'s `PostgresPersister` writes every
-   `IncidentRecord` (confirmed or needs_review) plus its `agent_run` stats to Postgres via
-   `api/repository.py`; a Postgres `LISTEN`/`NOTIFY` trigger pushes it to the dashboard's
-   live incident feed over WebSocket in the same request cycle.
+2. **Detect and track.** YOLO11s finds people and vehicles in each frame; ByteTrack plus a Kalman
+   filter keep a stable identity and smoothed motion for each one. (Forklifts aren't a class in
+   the model's training data, so trucks/buses stand in as "heavy vehicle"; see
+   [spike-02](docs/spikes/spike-02-forklift-class.md).)
+3. **Project to the floor.** For a calibrated camera, the bottom-center of each person's or
+   vehicle's box is projected through the camera's homography to a floor position in meters.
+   Zone membership is computed whenever *any* calibration exists; metric speed only when the
+   calibration clears the 2.0 px error gate.
+4. **Evaluate rules.** `RuleEngine` checks proximity (distance + duration + closing speed), zone
+   dwell, and speed, with cooldowns so one situation doesn't fire repeatedly, and emits a
+   `TriggerEvent` when a rule holds for its threshold.
+5. **Capture evidence.** A rolling buffer writes the seconds before and after each trigger to
+   `tracks.jsonl` and `clip.mp4`: exactly the data the slow plane re-checks.
+6. **Dispatch.** `agent/worker.py` takes the trigger off a Redis consumer group (an entry a
+   crashed worker never acknowledged is reclaimed, not lost), writes the incident files, and
+   starts one Prime Agent session with the right prompt: pairwise-distance verification for
+   proximity, a sanity check for zone and speed triggers.
+7. **Verify by computing.** The agent runs Python against `tracks.jsonl` and writes
+   `result.json`. The worker validates it against the `KinematicsVerdict` schema, then Band-3
+   recomputes and compares.
+8. **Record and push.** Pass → `confirmed`; anything else → `needs_review` with a reason. Either
+   way the `IncidentRecord` and its token/turn stats go to Postgres, and a `NOTIFY` trigger pushes
+   it to the dashboard over WebSocket.
 
 ## Results
 
-All numbers are reproducible from this repo:
+All reproducible from this repo; see [Verify the claims](#verify-the-claims-a-reviewers-path).
 
-- **M1 (fast-path benchmark):** YOLO11s clears the ≥25 FPS single-stream floor at 1080p
-  (**35.0 FPS**, RTX A4500) — both a clean-boot number and a thermal-throttled number
-  (15–17 FPS after 2 hours of contended GPU load) are recorded, because hiding the
-  discrepancy would be dishonest and the throttling finding is itself useful for hardware
-  sizing (`docs/benchmarks.md`).
-- **M2 (spatial layer):** rule engine, evidence capture, and broker hardening validated
-  by 94 tests at close, including real (not just synthetic) calibration data from actual
-  phone footage — which caught two real bugs: a vanishing-point sign ambiguity and an
-  overly-strict rotation tolerance that rejected valid noisy real-world line picks.
-- **M3 (agent slow path), measured 2026-09-17:** 10 hand-designed incidents run against
-  the real `prime-agent` 0.9.3 CLI — **10/10 validation pass, 9/9 classification
-  agreement, p50 triage latency 75.6s, max 96.0s.** Full table:
-  [docs/eval-m3-agent-slow-path.md](docs/eval-m3-agent-slow-path.md).
-- **M4 (delivery plane), 2026-09-17:** real Postgres persistence, FastAPI REST+WS, React
-  dashboard — verified against the actual running docker-compose stack, including a
-  websockets client observing an `incident.created` push through the exact Vite proxy
-  path (`/api`, `/live/ws`) a browser uses, while a raw Postgres `UPDATE` fired it.
-- **M5 (evaluation & tuning), measured 2026-09-18:** eval set expanded 10 → 30 fixtures;
-  raw validation pass 26/30 (86.7%), all 4 misses traced to one external timeout that
-  completed correctly in 48-65s on retest, not a capability failure — timeout
-  recalibrated (150s → 210s) on that evidence, not a guess. Classification agreement
-  23/28 (82.1%), clears its 80% target. TensorRT FP16 benchmark matrix: 34-57%
-  single-stream speedup; 3-stream min-stream FPS is 30.2 (idle-recovered GPU, clears the
-  ≥25 FPS floor) vs. 9.5-13.2 (sustained thermal load, doesn't) — both published, since
-  production sizing needs the worst case, not the best one. MOTA/IDF1 measured for real
-  against MOT17 (0.16-0.46, honestly explained — a generic COCO detector isn't tuned for
-  MOT17's crowd density). Full results:
-  [docs/eval-m5-agent-slow-path.md](docs/eval-m5-agent-slow-path.md),
-  [docs/benchmarks.md](docs/benchmarks.md).
-- **M6 (reference architecture & portfolio polish), closed:** all three clouds' Terraform realized from
-  the AWS PDF spec and the GCP/Azure deployment guides, `fmt`/`validate` green in CI.
-  Three real bugs caught by actually running `terraform validate` against real provider
-  schemas (not by inspection) — a dangling GCP service-account reference, an Azure
-  resource name Azure itself rejects, a wrong Terraform argument name — all fixed in both
-  the `.tf` files and the source docs. The main `ci` workflow itself was also found red
-  since project inception (a pre-existing lint violation plus a broken pnpm workspace
-  config neither ever used in practice) and fixed for real, confirmed via a live CI run.
-  Separately, `scripts/replay_demo.py` + `make replay-up` deliver the $0 public-demo stack
-  itself: postgres + api + ui + a pure-Python fixture-replay service, no GPU and no LLM call
-  in the loop — verified against a live Postgres/API, including two real bugs a live test
-  caught (a compose project-name collision that recreated the main dev stack's own postgres
-  container, and a startup race fixed with proper healthchecks).
-- **157 tests** (130 passing offline + 27 Postgres-integration, `uv run pytest`), ruff and
-  mypy clean repo-wide, `npm test`/`npm run build` clean — all verified green in CI, not
-  just locally.
+- **Detection speed:** YOLO11s runs at 35.0 FPS single-stream on 1080p video (RTX A4500 laptop
+  GPU). Native 4K decoding, not the model, was the bottleneck, so the clips are served at 1080p.
+  TensorRT FP16 added 34–57% single-stream. Three simultaneous streams reached 30.2 FPS each on a
+  rested GPU but 9.5–13.2 under sustained thermal load; both are published, because production
+  sizing needs the worst case ([docs/benchmarks.md](docs/benchmarks.md)).
+- **Agent verification:** against the real Prime Agent CLI, 10/10 incidents passed at M3; on the
+  expanded 30-incident set at M5, 26/30 passed first time (86.7%). All four misses were the same
+  150 s timeout, and all four completed correctly in 48–65 s on retest, so the timeout was raised
+  to 210 s on that evidence. Classification agreement with the hand labels was 82.1% (96.4%
+  timeout-adjusted); the one real disagreement traced to a fixture-labeling issue.
+  Median verification time: 68.8 s ([eval](docs/eval-m5-agent-slow-path.md)).
+- **Tracking accuracy:** MOTA 0.16–0.46 on MOT17 pedestrian sequences. That's low, and expected
+  for an off-the-shelf detector on crowded street scenes it wasn't tuned for; it's reported as a
+  baseline, not a claim of tracking quality on site footage.
+- **Calibration:** both methods validated on real phone footage, catching two bugs (a sign
+  ambiguity in the vanishing-point math, and a rotation tolerance too strict for real-world line
+  picks). A later cross-platform CI failure exposed that the sign fix was itself incomplete, and
+  the corrected version resolves it with a real margin rather than a floating-point coin flip.
+- **Cloud:** all three Terraform environments validate. Running `terraform validate` for real
+  caught three bugs in the source specs (a dangling reference, a name Azure rejects, a wrong
+  argument name), fixed in both the code and the runbooks.
+- **Quality gates:** 157 tests, ruff and mypy clean, UI type-check and build clean, all green in
+  CI.
 
 ## Limitations
 
-- **No live deployment, and none is planned as a hosted demo.** This is a local-stack
-  project by design (ADR-004); three complete Terraform stacks (AWS/GCP/Azure) exist and
-  validate in CI (`terraform fmt -check` + `validate`, never `apply`) as reference
-  architecture, not a running service.
-- **Real per-camera calibration for the three named demo cameras (dock/yard/warehouse) is
-  still open.** Both calibration methods are validated end-to-end against real footage of
-  a personal test fixture, not the actual demo camera angles — that's a genuine,
-  unresolved gap, not a documentation nit.
-- **`prime-agent` isn't installable in CI yet.** It isn't on the public npm registry
-  (`"private": true` in its own `package.json`); `Dockerfile.agent` uses a vendored
-  tarball as an interim (`docker/vendor/README.md`), and the CI contract test replays a
-  real captured transcript rather than driving the live CLI. A private registry (GitHub
-  Packages) with build-time auth is the real fix, still owed.
-- **The agent eval set (n=30) is still synthetic, hand-built tracklet fixtures, not real
-  camera footage.** It validates the agent/Band-3/schema pipeline end to end, not the
-  fast path's detection/tracking accuracy against real clips (that's `docs/benchmarks.md`'s
-  job) or real-world per-camera calibration (still open, above).
-- **No video+boxes overlay or 2D site canvas in the dashboard.** The incident feed,
-  needs_review queue, and evidence viewer (clip playback) are real and verified; a live
-  view of current track positions needs `frame.ticker` (bridging Redis's per-camera
-  tracklet streams to WS), which stays unwired — `docs/06`'s own §5 flags this.
-- **PPE detection (helmet/vest) isn't built.** The schema has fields for it
-  (`PPEState`); M5 closed without the fine-tuned classifier landing — genuinely
-  deferred, not silently dropped, and not yet re-scoped to a specific milestone.
-- **The M6 Terraform is real but the multi-cloud benchmark/cost picture leans on a single
-  development GPU.** S2 (≥3 streams ≥25 FPS) is confirmed reachable (idle-recovered) but
-  not guaranteed under continuous production load on this specific laptop-class card — see
-  `docs/benchmarks.md`'s sustained-load numbers, and the explicit recommendation to size
-  cloud deployments off those, not the best case.
-- **Agent budget flags alone are not a trustworthy ceiling** — documented, not hidden:
-  spike-01 found `--autonomous-max-turns` did not stop a runaway task, so
-  `agent/prime_adapter.py`'s own external timeout is the real backstop, and any future
-  agent-driving code in this repo needs the same discipline.
+- **Simulated inputs only.** The cameras are looped stock clips, and the agent eval set is 30
+  hand-built tracking scenarios, not real incidents.
+- **The demo cameras aren't calibrated, so on video the rules don't fire.** Calibration needs a
+  few known real-world measurements per camera, which stock footage doesn't provide (both
+  methods were attempted on the demo clips and documented as inconclusive). Only the author's own
+  test clip is calibrated. The end-to-end path from a demo camera to a dashboard incident has
+  therefore never run; each half has been verified separately.
+- **No alarm output.** Rules fire in milliseconds, but nothing sounds an alarm off them. A person
+  sees an incident on the dashboard only after the ~1-minute agent verification. A consumer on
+  the `trigger_events` stream is the missing piece ([docs/02 §3](docs/02-system-architecture.md)).
+- **Prime Agent is used narrowly.** One verification role per incident, using the REPL and RPC
+  mode. The designed compliance auditor, shift synthesizer, model-tier routing, scheduling, and
+  Continual Harness sub-agent specs were not built ([docs/05](docs/05-agent-orchestration.md)).
+- **Not reproducible everywhere yet.** `prime-agent` isn't on npm, so the agent container builds
+  only from a vendored package; CI checks the agent integration by replaying a recorded session
+  instead. The full stack also needs the clips and weights downloaded by hand.
+- **No live video view.** The dashboard has no video-with-boxes overlay or 2D site map (they
+  need a live track feed, `frame.ticker`, that wasn't built). PPE (hard hat / vest) detection
+  was never built either.
+- **Local-demo security only.** The API has no authentication, and the compose files expose the
+  API and dashboard ports on all network interfaces. Fine on a private machine; not fine on a
+  shared network ([docs/08](docs/08-security.md)).
+- **The dashboard has no automated tests** (`npm test` passes with zero tests), and there's no
+  prompt-injection test suite.
+- **One development GPU.** All performance numbers come from a single laptop-class GPU.
 
 ## Operational notes
 
-### What actually runs where
+### What runs where
 
 | Component | Runs as | Notes |
 | --- | --- | --- |
-| `mediamtx` | Docker Compose service | Loops pinned demo clips as RTSP (simulated cameras) |
-| `redis` | Docker Compose service | Streams broker: `tracklets:{camera}` (5 min retention), `trigger_events` (1 h retention, consumer groups) |
-| `postgres` | Docker Compose service | Real schema (docs/06 §6): `incidents`, `reviews`, `agent_runs`, with a `NOTIFY`-emitting trigger the API listens on for the dashboard's live push |
-| `vision-*` workers | Docker Compose service, one per camera, GPU passthrough | `pipelines.vision.pipeline`, YOLO11s + ByteTrack |
-| `agent` | Docker Compose service | `docker/Dockerfile.agent` runs `agent.worker` as a standing consumer against Redis, persisting via `PostgresPersister`; verified running end to end inside the actual built image, not just on the host |
-| `api` (FastAPI) | Docker Compose service | Real REST+WS surface (`GET/POST /api/v1/incidents[/review]`, `/api/v1/{cameras,zones,rules,kpis}`, `/live/ws`, evidence + shift-report endpoints) |
-| `ui` | Docker Compose service | Vite dev server proxying `/api`, `/healthz`, `/live/ws` to `api` — the dashboard |
+| `mediamtx` | full stack | Loops the demo clips as RTSP (ports 8554, 8889) |
+| `vision-*` | full stack, one per camera, GPU | Detector + tracker + rules; writes evidence to the shared workspace |
+| `redis` | full stack | Streams broker; not published to the host |
+| `agent` | full stack | Prime Agent worker; mounts `~/.prime` for model auth |
+| `postgres` | both stacks | `incidents`, `reviews`, `agent_runs`; not published to the host |
+| `api` | both stacks | FastAPI on port 8000; creates the schema on startup |
+| `ui` | both stacks | Vite dev server on port 5173, proxying `/api` and `/live/ws` to the API |
+| `replay` | replay stack only | Replays the 30 fixtures into Postgres; replaces `mediamtx`, `vision-*`, and `agent` |
 
 ### Data and keys
 
 | Variable | Purpose |
 | --- | --- |
-| `REDIS_URL` | broker connection (`pipelines/vision/pipeline.py`, `agent/worker.py`); defaults to `redis://localhost:6379` |
-| `YOLO_WEIGHTS` | override the detector weights path; defaults to `yolo11s.pt` |
-| `DATABASE_URL` | Postgres connection for `api/main.py` and `agent/persistence.py`'s `PostgresPersister`; defaults to the local docker-compose credentials |
-| `WORKSPACE_ROOT` | shared volume the `agent` service writes evidence into and the `api` service serves read-only (`GET /api/v1/incidents/{id}/evidence/*`) |
-| — | `prime-agent`'s own model/API auth (OpenRouter) is configured through its own persistent harness state (`~/.prime/`), not a `sitework-ai` environment variable |
+| `DATABASE_URL` | Postgres for the API and the agent's persister (defaults to the local compose credentials) |
+| `REDIS_URL` | broker connection for the vision workers and agent |
+| `YOLO_WEIGHTS` | detector weights path (container default `/models/yolo11s.pt`) |
+| `EVIDENCE_ROOT` / `WORKSPACE_ROOT` | the shared evidence folder the vision workers write, the agent reads, and the API serves |
+| `PRIME_HARNESS_DIR` | host folder mounted as the agent's `~/.prime` (defaults to `~/.prime`) |
+| `TEST_DATABASE_URL` | enables the 27 Postgres integration tests |
 
-No cloud credentials are used anywhere in this repo's runtime path — the Terraform in
-`deploy/` is validated, never applied (ADR-004).
+The model provider key (OpenRouter in the evals) lives in Prime Agent's own `~/.prime`
+configuration, not in this repo. No cloud credentials are used anywhere: the Terraform is
+validated, never applied.
 
 ### Verify the claims (a reviewer's path)
 
 ```bash
-uv run pytest -q                          # 122 tests offline; +27 with TEST_DATABASE_URL set
-uv run ruff check . && uv run mypy        # lint + types, repo-wide
-uv run python scripts/check_docs.py       # cross-doc consistency gate
-uv run python -m evaluation.agent_eval    # re-run the 30-fixture seeded eval (needs prime-agent installed)
-uv run python -m evaluation.eval_tracking # re-run MOTA/IDF1 against MOT17
-make up                                   # full local stack, simulated feeds, dashboard at :5173
-curl -s http://localhost:8000/healthz     # API liveness
-curl -s http://localhost:8000/api/v1/kpis # real KPI query against Postgres
-cd ui && npm ci && npm test && npm run build   # dashboard: install, test, build
-cd deploy/terraform/environments/aws && terraform fmt -check && terraform validate  # x3 clouds
+uv run pytest -q                          # 130 offline; 157 with TEST_DATABASE_URL set
+uv run ruff check . && uv run mypy        # lint + types
+uv run python scripts/check_docs.py       # cross-document consistency checks
+make replay-up                            # the dashboard at http://localhost:5173
+curl -s http://localhost:8000/api/v1/kpis # live counts from Postgres
+(cd ui && npm ci && npm run build)        # dashboard type-check + build
+make iac                                  # terraform fmt + validate, all three clouds (needs terraform)
+make agent-eval                           # the 30-incident eval (needs prime-agent installed)
+make tracking-eval                        # MOTA/IDF1 (needs the MOT17 download)
 ```
 
 ### Documentation map
 
 | Doc | What it covers |
 | --- | --- |
-| [PLAN.md](PLAN.md) | The master plan: scope, milestones, success criteria |
-| [docs/01](docs/01-vision-and-scope.md)–[06](docs/06-schemas-and-api.md) | Vision/scope, system architecture, hybrid design, data/models, agent orchestration, schemas+API |
-| [docs/07-repo-layout.md](docs/07-repo-layout.md) | Repo layout, conventions, CI workflows, Makefile targets |
-| [docs/08-security.md](docs/08-security.md) | Container hardening, secrets, prompt-injection posture |
-| [docs/09-testing-and-evaluation.md](docs/09-testing-and-evaluation.md) | Test pyramid, known-answer tests, agent eval methodology |
-| [docs/10-cost-model.md](docs/10-cost-model.md) | LLM spend mechanics, measured vs. estimated cost |
-| [docs/11-risks.md](docs/11-risks.md) | Risk register with measured outcomes, not just guesses |
-| [docs/12-roadmap.md](docs/12-roadmap.md) | Live milestone status — the actual source of truth for "what's done" |
-| [docs/13-architecture-diagrams.md](docs/13-architecture-diagrams.md) | C4 context + container diagrams, and sequence diagrams for the real incident flow and the replay-mode flow |
-| [docs/benchmarks.md](docs/benchmarks.md) | Fast-path FPS/latency/VRAM/MOTA/IDF1 numbers — M1 clean-boot baseline through the M5 precision × stream matrix (sustained-load and idle-recovered, both published) |
-| [docs/eval-m3-agent-slow-path.md](docs/eval-m3-agent-slow-path.md) | M3 agent eval results (n=10), run against the real CLI |
-| [docs/eval-m5-agent-slow-path.md](docs/eval-m5-agent-slow-path.md) | M5 agent eval results (n=30) + the timeout-recalibration retest that backs the 150s→210s change |
-| [docs/prime-agent-feasibility.md](docs/prime-agent-feasibility.md) | The feasibility analysis behind embedding Prime Agent as a runtime component |
-| [docs/spikes/](docs/spikes/) | Time-boxed de-risking spikes (GPU benchmark, forklift class, Prime Agent headless) with honest results |
+| [PLAN.md](PLAN.md) | The master plan, success criteria S1–S6 with their final status, milestone summary |
+| [docs/01-vision-and-scope.md](docs/01-vision-and-scope.md) | The problem, personas, and original scope (with a vision-vs-built note) |
+| [docs/02-system-architecture.md](docs/02-system-architecture.md) | Components, latency budget, failure modes, implementation status |
+| [docs/03-hybrid-design.md](docs/03-hybrid-design.md) | The three bands: deterministic perception, probabilistic reasoning, deterministic gates |
+| [docs/04-data-and-models.md](docs/04-data-and-models.md) | Datasets, model choice, calibration, the benchmark matrix |
+| [docs/05-agent-orchestration.md](docs/05-agent-orchestration.md) | Agent roles as designed vs. as built |
+| [docs/06-schemas-and-api.md](docs/06-schemas-and-api.md) | Data contracts, the Band-3 tolerances, the real API and database schema |
+| [docs/07-repo-layout.md](docs/07-repo-layout.md) | Repository tree, conventions, CI, Make targets |
+| [docs/08-security.md](docs/08-security.md) | Threat model, with an implemented-vs-designed status per control |
+| [docs/09-testing-and-evaluation.md](docs/09-testing-and-evaluation.md) | Test pyramid, agent-eval method and metrics, known coverage gaps |
+| [docs/10-cost-model.md](docs/10-cost-model.md) | LLM spend (measured vs. estimated), demo hosting, cloud bill of materials |
+| [docs/11-risks.md](docs/11-risks.md) | Risk register with outcomes |
+| [docs/12-roadmap.md](docs/12-roadmap.md) | Milestone-by-milestone history — the source of truth for what's done |
+| [docs/13-architecture-diagrams.md](docs/13-architecture-diagrams.md) | C4 and sequence diagrams of what actually runs |
+| [docs/benchmarks.md](docs/benchmarks.md) | Detection speed and tracking accuracy numbers |
+| [docs/eval-m3-agent-slow-path.md](docs/eval-m3-agent-slow-path.md) / [eval-m5](docs/eval-m5-agent-slow-path.md) | Agent eval results (n=10, n=30) |
+| [docs/prime-agent-feasibility.md](docs/prime-agent-feasibility.md) | Can an RLM agent be an application component? The analysis, and how it turned out |
+| [docs/spikes/](docs/spikes/) | Time-boxed experiments: GPU benchmark, forklift class, Prime Agent headless |
 | [docs/adr/](docs/adr/) | Architecture decision records |
-| [docs/deployment/](docs/deployment/) | AWS/GCP/Azure reference deployment guides — real runbooks for the Terraform in `deploy/terraform/` (documentation-only, ADR-004) |
+| [docs/deployment/](docs/deployment/) | AWS / GCP / Azure runbooks for the Terraform |
 
-## Engineering context
+## Glossary
 
-The slow-path agent is a containerized deployment of **[Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent)**, Prime Intellect's open-source agent built on their **[RLM](https://www.primeintellect.ai/blog/rlm) (Recursive Language Model)** idea: instead of stuffing everything into one model's context window, an RLM keeps its own reasoning lean and manages a persistent Python REPL plus recursive calls to sub-LLMs to do the heavy lifting — exactly the shape this project needed for an incident verifier that must *compute* an answer (execute code against the raw tracklet window) rather than *guess* one from a prompt. `agent/prime_adapter.py` is the only module in this repo allowed to invoke it, wrapped in an external timeout the feasibility spike showed was necessary regardless of the CLI's own budget flags — see [docs/prime-agent-feasibility.md](docs/prime-agent-feasibility.md) for the full verified-capability writeup and [docs/spikes/spike-01-prime-agent-headless.md](docs/spikes/spike-01-prime-agent-headless.md) for the honest results of actually running it headless.
+| Term | Meaning |
+| --- | --- |
+| **Deterministic** | Always produces the same output for the same input: plain math and rules, no randomness or AI judgment |
+| **Detection / bounding box** | The model finding an object in a frame and drawing a rectangle around it |
+| **Tracking / track** | Linking detections across frames so "person #42" stays person #42 as they move |
+| **Tracklet** | A short stretch of one track; `TrackletFrame` is one snapshot of all tracks from one camera |
+| **Calibration / homography** | The mapping from camera pixels to floor positions in meters, solved from known reference points or lines |
+| **RTSP** | The streaming protocol network cameras use; MediaMTX fakes it here with looping files |
+| **TriggerEvent** | The packet the fast plane emits when a rule fires: rule, camera, tracks involved, measured values |
+| **RLM (Recursive Language Model)** | A language model that works inside a live Python session, treating its inputs as data to compute on and calling sub-models like functions |
+| **REPL** | An interactive code session (here, Python) the agent runs code in |
+| **Band-3 gate** | The deterministic check that recomputes the agent's numbers before anything is recorded |
+| **`needs_review`** | The state for an incident the gate couldn't confirm; it waits for a human decision |
+| **TensorRT / FP16** | NVIDIA's inference optimizer, and the half-precision number format that makes the model faster |
+| **MOTA / IDF1** | Standard scores for how accurately a tracker follows people across frames |
 
 ## License
 
-[MIT](LICENSE).
+This repository's code is [MIT](LICENSE). The full video pipeline depends on
+[Ultralytics](https://github.com/ultralytics/ultralytics) and its YOLO11 weights, which are
+**AGPL-3.0**, so that combination carries AGPL obligations; any commercial or hosted-service
+use would need an Ultralytics Enterprise license or a different detector
+([data/manifests/yolo11-weights.yaml](data/manifests/yolo11-weights.yaml)). Demo clips are
+under the Pexels License, and datasets under their own terms (see `data/manifests/`).
 
 ## Author
 
 **Paul Christopher Schmidt** — [@PCSchmidt](https://github.com/PCSchmidt)
+
+The codebase was built with the help of [Claude Code](https://claude.com/claude-code). Prime
+Agent is a runtime component of the application, not the tool that built it.

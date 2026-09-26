@@ -68,53 +68,88 @@ Recompute metrics from `tracks.jsonl` with the same deterministic functions the 
 reject on mismatch. **Tolerances:** |Δdistance| ≤ 0.15 m, |Δvelocity| ≤ 0.2 m/s,
 |Δtime| ≤ 0.2 s — or 5% relative, whichever is larger.
 
-- **Fields cross-checked:** `metrics.min_distance_m`, `metrics.duration_s`,
-  `metrics.closing_speed_mps` from the TriggerEvent vs `verified_min_distance_m`,
-  `closing_velocity_mps`, `ttc_s` claimed in the KinematicsVerdict.
+- **Fields cross-checked (as implemented in `agent/band3.py`):** for proximity triggers (exactly
+  two involved tracks), the recomputed minimum distance is compared against both the fast path's
+  `metrics.min_distance_m` and the agent's `verified_min_distance_m`, and the recomputed closing
+  velocity against the agent's `closing_velocity_mps`. Zone-intrusion and speed triggers have no
+  pairwise distance, so they pass the gate on schema validation alone. The original design also
+  listed `duration_s` and `ttc_s`; neither is cross-checked today (the 0.2 s time tolerance is
+  defined in `pipelines/schemas/models.py` but not applied by the gate).
 - **Timestamp alignment:** nearest frame within 50 ms; the stored tracklet window is replayed at
   identical sample indices — no interpolation, no re-tracking.
 - **Rounding:** comparisons on float64; no early rounding in either implementation.
 
-## 4. REST API (FastAPI, `/api/v1`)
+## 4. REST API (FastAPI, `api/main.py`)
+
+As implemented (every route below exists and is covered by `tests/test_api.py`):
 
 | Method/Path | Purpose |
 | --- | --- |
-| `GET /incidents?from=&to=&severity=&camera=` | paged incident list |
-| `GET /incidents/{id}` | full record + evidence refs |
-| `POST /incidents/{id}/review` | human review state transition |
-| `GET /cameras` / `GET /cameras/{id}/health` | config + watchdog state |
-| `GET /zones` / `GET /rules` | active geofences and rule definitions |
-| `GET /shifts/{date}/report` | synthesized shift audit (md/pdf) |
-| `GET /kpis?window=` | near-miss rate, dwell, PPE adherence |
-| `GET /live/ws` (WS) | telemetry + incident push |
+| `GET /healthz` | liveness; returns 200 only after startup has created the schema |
+| `GET /api/v1/incidents?from_ts=&to_ts=&severity=&camera=&state=&limit=&offset=` | paged incident list, newest first |
+| `GET /api/v1/incidents/{event_id}` | one full `IncidentRecord` |
+| `POST /api/v1/incidents/{event_id}/review` | record a human review decision (`reviewer`, `decision`, optional `note`) |
+| `GET /api/v1/incidents/{event_id}/evidence/tracks` | the incident's `tracks.jsonl`, parsed to JSON |
+| `GET /api/v1/incidents/{event_id}/evidence/clip` | the incident's `clip.mp4` (404 when none was captured) |
+| `GET /api/v1/cameras` / `GET /api/v1/cameras/{id}/health` | camera config; health returns `status: unknown` (the stream watchdog was never built) |
+| `GET /api/v1/zones` / `GET /api/v1/rules` | geofences and rule definitions, served straight from `config/*.yaml` |
+| `GET /api/v1/kpis?window=` | incident counts by classification and by state over the last `window` hours |
+| `GET /api/v1/shift-report?from_ts=&to_ts=` | HTML report stitching together each incident's own narrative for the window |
+| `WS /live/ws` | incident push (see §5) |
+
+`event_id` is regex-validated before it's used in a filesystem path, so evidence routes can't be
+used for path traversal.
+
+**Designed but not built:** a scheduled, agent-written shift audit (`GET /shifts/{date}/report`,
+md/pdf; the shift-report route above is its deterministic stand-in), and KPIs for dwell time
+and PPE adherence (PPE detection doesn't exist).
 
 ## 5. WebSocket protocol
 
-Server pushes: `frame.ticker` (site-map track positions @2 Hz aggregated), `incident.created`,
-`incident.updated`, `stream.health`. Client sends: `subscribe {camera_ids}`, `ping`.
+As implemented: the server pushes `incident.created` and `incident.updated`, driven by a
+Postgres `LISTEN`/`NOTIFY` trigger on the `incidents` table. There is no replay on reconnect;
+the dashboard re-fetches over REST after a dropped connection.
 
-## 6. PostgreSQL schema (core tables)
+**Designed but not built:** `frame.ticker` (live track positions for a site map, ~2 Hz) and
+`stream.health`, plus client `subscribe {camera_ids}`. `frame.ticker` is the missing piece
+behind the dashboard's absent video/bounding-box overlay and 2D site canvas (docs/02 §1).
+
+## 6. PostgreSQL schema (`api/schema.sql`)
+
+As implemented, three tables plus a notify trigger. The schema is idempotent and applied on
+every API startup:
 
 ```sql
-cameras(id PK, name, rtsp_url, calibration jsonb, created_at);
-zones(id PK, camera_id FK, polygon jsonb, kind, active bool);
-tracks(track_id, camera_id FK, cls, first_seen, last_seen, PK(track_id, camera_id));
-track_frames(event_id FK, frame_ts, payload jsonb, PK(event_id, frame_ts));  -- triggered windows
-incidents(id PK, event_id UNIQUE FK, camera_id FK, trigger_ts, severity, classification,
-          verified_metrics jsonb, narrative_md text, rule_citations text[], state,
-          rejection_reason text, created_at);
-agent_runs(id PK, incident_id FK NULL, kind, model, tokens_in, tokens_out, turns,
-           wall_ms, status, created_at);          -- observability of the cognitive plane
-reviews(incident_id FK, reviewer, decision, note, at);
+incidents(id uuid PK, event_id text UNIQUE, camera_id, trigger_ts, severity, state,
+          classification NULL, verified_kinematics jsonb NULL, rejection_reason NULL,
+          narrative_md, rule_citations text[], recommended_actions text[],
+          evidence_refs text[], created_at);
+reviews(id PK, incident_id FK -> incidents, reviewer, decision, note, at);
+agent_runs(id PK, incident_id FK NULL, event_id, kind, model, tokens_in, tokens_out,
+           turns, wall_ms, status, created_at);   -- logged for every attempt, incl. crashes
+-- trigger incidents_notify: pg_notify('incident_change', {event_id, op}) on INSERT/UPDATE
 ```
 
-Retention: `track_frames` 30 days (only triggered windows are stored); incidents indefinite;
-clips lifecycle-managed in object storage (7 days default, pinned for flagged incidents).
+Cameras, zones, and rules are deliberately **not** tables: they stay in `config/*.yaml` and the
+API serves them from there, so there's one source of truth instead of two copies that can drift.
+Incidents are written by upsert on `event_id`, so a reprocessed trigger updates its row rather
+than duplicating it.
+
+**Designed but not built:** `cameras`/`zones` tables (superseded by the config-file decision
+above), `tracks` and `track_frames` (evidence windows are stored as `tracks.jsonl` files on the
+shared workspace volume instead), and the retention policy (30-day windows, 7-day clip
+lifecycle). Nothing is expired automatically today.
 
 ## 7. Config files
 
 - `config/cameras.yaml`: rtsp urls, decode params, per-camera confidence gates.
-- `config/zones.yaml`: polygons (ground-plane meters), rule bindings, dwell/proximity params,
-  `min_calibration_quality`, `cooldown_s`.
-- `config/rules.yaml`: rule ids, human-readable descriptions, compliance citation strings.
-- All configs validated at startup against Pydantic settings models; bad config ⇒ fail fast.
+- `config/zones.yaml`: polygons (ground-plane meters), zone kind, `active`, and
+  `min_calibration_quality`.
+- `config/rules.yaml`: rule ids, kind, human-readable descriptions, compliance citation strings,
+  zone bindings, and the rule parameters (`radius_m`, `duration_s`, `dwell_s`, `limit_mps`,
+  `cooldown_s`).
+- `config/shifts.yaml`: shift windows. Schema-validated by `tests/test_config.py`, but nothing
+  consumes it yet: it was meant to drive the (unbuilt) Shift Synthesizer's shift boundaries, and
+  the shift-report route takes an explicit `from_ts`/`to_ts` instead.
+- Each config is validated against its Pydantic model when a process loads it; bad config ⇒ fail
+  fast (`pipelines/config/loader.py`).
