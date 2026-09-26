@@ -455,10 +455,16 @@ the sustained-load number, since that's the actual production duty cycle, not th
       actually been exercised end-to-end before this. Fixed for real: added the `--evidence-root`
       arg (env-var default `EVIDENCE_ROOT`), wired `agent_workspace:/workspace` into the
       `vision-volumes` anchor, and pointed both services at the same
-      `/workspace/incidents` path. Demo GIF/video remains open -- no screen-capture tooling
-      available in this working session; left as a manual follow-up.
+      `/workspace/incidents` path.
+- [x] Demo GIF -- done 2026-09-26. `docs/assets/demo.gif` (1233x819, ~63s, 596 KB), embedded at the
+      top of the README. Recorded with ScreenToGif against a real `make replay-up` stack with the
+      replay interval temporarily lowered 15s -> 3s for recording only (reverted afterward; the
+      committed config is unchanged). Framed to the dashboard page only, so no browser chrome or
+      personal bookmarks are in the recording. Shows the live feed filling in, the needs_review
+      filter and a Band-3 rejection reason, and a confirmed violation with its narrative.
 - [ ] Helm chart explicitly descoped (stretch only, not part of M6 exit)
 **Exit:** S5 met; public demo $0/mo; portfolio package complete.
+**M6 CLOSED 2026-09-26.** All exit criteria met; the Helm chart stays a descoped stretch item.
 
 ## Ongoing habits
 - Weekly: one merged demoable increment; keep `docs/spikes/` for any 1–2 day investigations.

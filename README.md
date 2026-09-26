@@ -1,16 +1,23 @@
 # SiteWatch AI — hybrid deterministic/probabilistic industrial safety intelligence
 
-**Status: active development, no live deployment.** This is a local-stack portfolio
+**Status: complete (M0–M6), no live deployment.** This is a local-stack portfolio
 project — `make up` runs the full system (camera simulation, detection/tracking, rule
 engine, agent, API, live dashboard) on your machine via Docker Compose; there is
 no hosted demo URL and none is planned (ADR-004: documentation-only cloud deployment —
 three fully-specified Terraform stacks for AWS/GCP/Azure exist, validate in CI, and are
 realized down to real resources — Fargate/SQS/EFS/Aurora/S3, Cloud Run/Pub/Sub/Filestore/
 Cloud SQL, Container Apps/Service Bus/Files/PostgreSQL — but none is applied to a live
-account). **M0–M5 are closed; M6 (reference architecture & portfolio polish) is in
-progress** — Terraform for all three clouds, `iac-check` CI, runbook review, cost
-model, and the simulated-live replay demo mode (`make replay-up`) are done; final
-README/ADR/diagram polish is what's left. Live status: [docs/12-roadmap.md](docs/12-roadmap.md).
+account). **M0–M6 are closed.** Milestone history and the known, disclosed gaps are
+in [docs/12-roadmap.md](docs/12-roadmap.md).
+
+![SiteWatch AI dashboard in replay mode: the live incident feed filling in, a
+needs_review incident showing why the Band-3 gate rejected it, and a confirmed violation
+with its narrative and recommended actions](docs/assets/demo.gif)
+
+*The dashboard running `make replay-up`: no GPU, no LLM call. The 30 hand-labeled example
+incidents are replayed into the real database/API/WebSocket path every few seconds (sped up
+to one every 3s for this recording). Replayed narratives are tagged `[REPLAY DEMO]`, and
+replay mode has no video, so "No clip captured" is the expected evidence state here.*
 
 ## What is this? (plain-language overview)
 
@@ -251,7 +258,7 @@ All numbers are reproducible from this repo:
   MOT17's crowd density). Full results:
   [docs/eval-m5-agent-slow-path.md](docs/eval-m5-agent-slow-path.md),
   [docs/benchmarks.md](docs/benchmarks.md).
-- **M6 (reference architecture), in progress:** all three clouds' Terraform realized from
+- **M6 (reference architecture & portfolio polish), closed:** all three clouds' Terraform realized from
   the AWS PDF spec and the GCP/Azure deployment guides, `fmt`/`validate` green in CI.
   Three real bugs caught by actually running `terraform validate` against real provider
   schemas (not by inspection) — a dangling GCP service-account reference, an Azure
