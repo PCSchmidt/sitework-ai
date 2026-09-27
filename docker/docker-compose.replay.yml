@@ -12,6 +12,9 @@
 # names and would recreate/take over a running docker-compose.yml stack; a
 # live test of this file without an explicit name did exactly that).
 name: sitework-replay-demo
+# Published ports bind to 127.0.0.1 (this machine only) by default: the API has no
+# authentication (docs/08 §2). To reach the stack from another device on your network,
+# opt in explicitly, e.g. `BIND_ADDR=0.0.0.0 make up`.
 services:
   postgres:
     image: postgres:16.4-alpine
@@ -42,7 +45,7 @@ services:
     volumes:
       - replay_workspace:/workspace:ro
     ports:
-      - "8000:8000"
+      - "${BIND_ADDR:-127.0.0.1}:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,7 +91,7 @@ services:
       - ../ui:/app
     command: sh -c "npm install && npm run dev"
     ports:
-      - "5173:5173"
+      - "${BIND_ADDR:-127.0.0.1}:5173:5173"
     depends_on: [api]
     networks: [internal]
 

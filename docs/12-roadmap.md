@@ -477,7 +477,8 @@ and what an RLM is. Findings, all now documented in the docs named:
   (docs/02 §3, docs/03); the API, WebSocket, and DB sections described unbuilt routes, messages,
   and tables (docs/06 §4–6); Band-3 checks distance and closing velocity only, not
   `duration_s`/`ttc_s` (docs/06 §3); most container/data hardening is design-only, and the
-  API/dashboard ports are published on all interfaces with no auth (docs/08 §2); no per-day
+  API/dashboard ports were published on all interfaces with no auth (docs/08 §2; ports now
+  bound to localhost, auth still open); no per-day
   budget alarm, CLI caps stated wrong (docs/10 §2); the agent runs one role with no harness specs,
   routing, or scheduling (docs/05, ADR-003, docs/prime-agent-feasibility.md); `root_policy.md` is
   not sent to the agent and told it to use an invalid classification value (fixed; docs/08 §4).
@@ -598,9 +599,10 @@ firing) and the dual-plane verdict, at a public URL.
   camera rather than hidden. The overhead `excavator_site_02` clip was rejected as a demo camera
   because it's a timelapse (tracks fragment into 40+ IDs in 10 s).
 
-Code-level follow-ups surfaced but not changed in the post-M6 pass: bind published ports to
-`127.0.0.1`; an alarm consumer on `trigger_events`; `api/main.py`'s camera-health response still
-says the watchdog is "not yet wired (M5)". (Demo-camera calibration: done in M7.)
+Code-level follow-ups surfaced but not changed in the post-M6 pass: an alarm consumer on
+`trigger_events`; `api/main.py`'s camera-health response still says the watchdog is "not yet
+wired (M5)". Done since: demo-camera calibration (M7); published ports bound to `127.0.0.1` by
+default, with a `BIND_ADDR` override (2026-09-27, docs/08 §2).
 
 
 ## Ongoing habits

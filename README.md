@@ -449,9 +449,10 @@ All reproducible from this repo; see [Verify the claims](#verify-the-claims-a-re
 - **The video overlay is recorded, not live.** The camera player draws recorded pipeline output;
   the running stack doesn't stream tracks to the browser (`frame.ticker` wasn't built). PPE
   (hard hat / vest) detection was never built either.
-- **Local-demo security only.** The API has no authentication, and the compose files expose the
-  API and dashboard ports on all network interfaces. Fine on a private machine; not fine on a
-  shared network ([docs/08](docs/08-security.md)).
+- **Local-demo security only.** The API has no authentication. The compose files publish the API,
+  dashboard, and video ports on `127.0.0.1` only, so nothing else on your network can reach them.
+  `BIND_ADDR=0.0.0.0 make up` opens them to your network deliberately (e.g. to view on a phone);
+  don't do that on a shared network ([docs/08](docs/08-security.md)).
 - **Thin dashboard tests.** Six unit tests cover the overlay's frame lookup and geometry; there
   are no component or end-to-end tests in CI, and there's no prompt-injection test suite.
 - **One development GPU.** All performance numbers come from a single laptop-class GPU.
@@ -480,6 +481,7 @@ All reproducible from this repo; see [Verify the claims](#verify-the-claims-a-re
 | `YOLO_WEIGHTS` | detector weights path (container default `/models/yolo11s.pt`) |
 | `EVIDENCE_ROOT` / `WORKSPACE_ROOT` | the shared evidence folder the vision workers write, the agent reads, and the API serves |
 | `PRIME_HARNESS_DIR` | host folder mounted as the agent's `~/.prime` (defaults to `~/.prime`) |
+| `BIND_ADDR` | host address the compose files publish ports on; default `127.0.0.1` (this machine only), `0.0.0.0` to allow other devices on your network |
 | `TEST_DATABASE_URL` | enables the 27 Postgres integration tests |
 
 The model provider key (OpenRouter in the evals) lives in Prime Agent's own `~/.prime`

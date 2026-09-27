@@ -1,5 +1,8 @@
 # One-command local full stack (docs/07 §4: make up). M1: mediamtx loops the 3 demo
 # clips as RTSP; vision workers run the fast path per camera. Agent service added at M3.
+# Published ports bind to 127.0.0.1 (this machine only) by default: the API has no
+# authentication (docs/08 §2). To reach the stack from another device on your network,
+# opt in explicitly, e.g. `BIND_ADDR=0.0.0.0 make up`.
 services:
   mediamtx:
     image: bluenviron/mediamtx:1.9.3-ffmpeg   # -ffmpeg variant for runOnDemand looping
@@ -7,8 +10,8 @@ services:
       - ./mediamtx.yml:/mediamtx.yml:ro
       - ../assets/clips:/clips:ro
     ports:
-      - "8554:8554"   # RTSP
-      - "8889:8889"   # WebRTC
+      - "${BIND_ADDR:-127.0.0.1}:8554:8554"   # RTSP
+      - "${BIND_ADDR:-127.0.0.1}:8889:8889"   # WebRTC
     networks: [internal]
 
   redis:
@@ -38,7 +41,7 @@ services:
     volumes:
       - agent_workspace:/workspace:ro
     ports:
-      - "8000:8000"
+      - "${BIND_ADDR:-127.0.0.1}:8000:8000"
     depends_on: [postgres, redis]
     networks: [internal]
 
@@ -140,7 +143,7 @@ services:
       - ../ui:/app
     command: sh -c "npm install && npm run dev"
     ports:
-      - "5173:5173"
+      - "${BIND_ADDR:-127.0.0.1}:5173:5173"
     depends_on: [api]
     networks: [internal]
 
