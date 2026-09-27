@@ -15,6 +15,11 @@ FAKE_PRIME_AGENT_MODE env var:
   already validated that against the real CLI).
 - "wrong_answer": writes a result.json with a deliberately wrong distance, to
   exercise the Band-3 gate's rejection path.
+- "echo": answers get_last_assistant_text with the prompt it received, to check
+  non-ASCII text survives the pipe both ways.
+
+Like the real (Node) prime-agent, it reads and writes raw UTF-8 regardless of the
+host's locale, and doesn't ASCII-escape its JSON output.
 """
 
 from __future__ import annotations
@@ -26,7 +31,7 @@ import time
 
 
 def _emit(obj: dict) -> None:
-    sys.stdout.write(json.dumps(obj) + "\n")
+    sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
     sys.stdout.flush()
 
 
@@ -115,11 +120,13 @@ def main() -> None:
         print("fake-prime-agent 0.0.0-test")
         return
 
+    sys.stdin.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     mode = os.environ.get("FAKE_PRIME_AGENT_MODE", "success")
     cwd = argv[argv.index("--cwd") + 1] if "--cwd" in argv else os.getcwd()
 
     line = sys.stdin.readline()
-    json.loads(line)  # the prompt request; contents unused by the fake
+    prompt_message = json.loads(line).get("message", "")
 
     if mode == "golden_replay":
         _replay_golden_session(os.environ["GOLDEN_SESSION_FIXTURE"])
@@ -168,7 +175,7 @@ def main() -> None:
                 {
                     "type": "response",
                     "command": "get_last_assistant_text",
-                    "data": {"text": "done"},
+                    "data": {"text": prompt_message if mode == "echo" else "done"},
                 }
             )
         elif req.get("type") == "abort":

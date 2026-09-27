@@ -42,3 +42,15 @@ def test_healthcheck_false_when_executable_missing(
     monkeypatch.setenv("PATH", str(tmp_path))  # nothing on PATH
     adapter = PrimeAdapter(cwd=".")
     assert adapter.healthcheck() is False
+
+
+def test_non_ascii_text_survives_the_rpc_pipe(
+    tmp_path, fake_prime_agent_on_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """prime-agent speaks UTF-8; a locale-default pipe (cp1252 on Windows) garbled
+    em dashes and symbols in prompts and replies ("—" came back as "â€”")."""
+    monkeypatch.setenv("FAKE_PRIME_AGENT_MODE", "echo")
+    message = "min distance — 4.2 m ≥ 2.0 m · zone “cross_aisle_west”"
+    with PrimeAdapter(cwd=tmp_path) as adapter:
+        result = adapter.prompt(message, timeout_s=10)
+    assert result.final_text == message

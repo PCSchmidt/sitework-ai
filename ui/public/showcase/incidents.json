@@ -30,10 +30,10 @@
   ],
   "agent_run": {
    "model": "prime-agent",
-   "tokens_in": 16662,
-   "tokens_out": 1013,
+   "tokens_in": 8504,
+   "tokens_out": 2096,
    "turns": 9,
-   "wall_ms": 39859
+   "wall_ms": 56670
   }
  },
  {
@@ -67,10 +67,10 @@
   ],
   "agent_run": {
    "model": "prime-agent",
-   "tokens_in": 21076,
-   "tokens_out": 1959,
+   "tokens_in": 9010,
+   "tokens_out": 2863,
    "turns": 8,
-   "wall_ms": 47032
+   "wall_ms": 78780
   }
  }
 ]

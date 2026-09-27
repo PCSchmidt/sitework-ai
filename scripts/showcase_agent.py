@@ -9,6 +9,7 @@ writes the resulting IncidentRecords for the static dashboard:
 
     {out}/incidents.json   list of IncidentRecord JSON, newest first
     {out}/evidence/{event_id}/tracks.jsonl
+    {out}/evidence/{event_id}/agent_transcript.json   the code the agent ran + outputs
 
 Nothing here is simulated: a timeout or gate rejection is saved as the
 `needs_review` record it really produced. Existing records are kept unless
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -31,6 +33,16 @@ from pathlib import Path
 import fakeredis
 from agent.worker import AgentWorker
 from pipelines.schemas import TriggerEvent
+
+# The agent's code sometimes names absolute paths into the temporary workspace,
+# which include the local username; published transcripts get a placeholder.
+_WORKSPACE_PATH = re.compile(
+    r"(?:[A-Za-z]:)?(?:[\\/]+[^\\/\"'\s]+)*?[\\/]+showcase-agent-[A-Za-z0-9_]+"
+)
+
+
+def redact_workspace(text: str) -> str:
+    return _WORKSPACE_PATH.sub("<workspace>", text)
 
 
 def main() -> None:
@@ -67,6 +79,11 @@ def main() -> None:
             dst = args.out / "evidence" / event.event_id
             dst.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(event_dir / "tracks.jsonl", dst / "tracks.jsonl")
+            transcript = Path(workspace) / "incidents" / event.event_id / "agent_transcript.json"
+            if transcript.exists():
+                (dst / "agent_transcript.json").write_text(
+                    redact_workspace(transcript.read_text(encoding="utf-8")), encoding="utf-8"
+                )
 
     records = sorted(existing.values(), key=lambda r: float(r["trigger_ts"]), reverse=True)
     args.out.mkdir(parents=True, exist_ok=True)

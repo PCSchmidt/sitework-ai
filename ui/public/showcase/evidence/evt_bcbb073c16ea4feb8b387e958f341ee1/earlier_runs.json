@@ -1,0 +1,115 @@
+[
+ {
+  "label": "Earlier run: caught by the gate",
+  "note": "Recorded 2026-09-27 before the fix that puts each rule's definition in the agent's prompt. Seeing only the rule id intrusion_forklift_aisle, the agent read it as 'a forklift intruding', saw only a person, and answered false_positive. The Band-3 gate recomputed the in-zone dwell from the same data, found the dwell limit met, and sent the incident to human review instead of letting the AI dismiss it.",
+  "incident": {
+   "schema_version": "1.0",
+   "event_id": "evt_bcbb073c16ea4feb8b387e958f341ee1",
+   "camera_id": "warehouse_aisle_01",
+   "trigger_ts": 1790511791.28,
+   "severity": "high",
+   "state": "needs_review",
+   "classification": "false_positive",
+   "verified_kinematics": {
+    "verified_min_distance_m": null,
+    "closing_velocity_mps": null,
+    "ttc_s": null,
+    "classification": "false_positive",
+    "recompute_inputs": {
+     "track_a": "9",
+     "track_b": "",
+     "frames_used": "67"
+    }
+   },
+   "rejection_reason": "Band-3 recomputation mismatch: agent classified false_positive, but recompute shows track 9 in ['cross_aisle_west'] for 3.00s continuously at the trigger, meeting the 3.0s dwell limit (tol 0.2s)",
+   "narrative_md": "",
+   "rule_citations": [
+    "intrusion_forklift_aisle"
+   ],
+   "recommended_actions": [],
+   "evidence_refs": [
+    "incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/tracks.jsonl",
+    "incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/clip.mp4"
+   ],
+   "agent_run": {
+    "model": "prime-agent",
+    "tokens_in": 61215,
+    "tokens_out": 1419,
+    "turns": 9,
+    "wall_ms": 64578
+   }
+  },
+  "transcript": {
+   "turns": 7,
+   "model": "z-ai/glm-5.3-flash",
+   "steps": [
+    {
+     "kind": "tool",
+     "tool": "ipython",
+     "code": "import json\nev = json.load(open('incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/event.json'))\nprint(json.dumps(ev, indent=1)[:2000])\ntracks = [json.loads(l) for l in open('incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/tracks.jsonl')]\nprint(len(tracks), tracks[0])",
+     "args": null,
+     "output": "Traceback (most recent call last):\n\n  File \"<cell-2>\", line 2, in <module>\n    ev = json.load(open('incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/event.json'))\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nFileNotFoundError: [Errno 2] No such file or directory: 'incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/event.json'",
+     "status": "error",
+     "ms": 2
+    },
+    {
+     "kind": "tool",
+     "tool": "ipython",
+     "code": "import os\nos.chdir(r'<workspace>/incidents/evt_bcbb073c16ea4feb8b387e958f341ee1')\nev = json.load(open('event.json'))\nprint(json.dumps(ev, indent=1))\ntracks = [json.loads(l) for l in open('tracks.jsonl')]\nprint(len(tracks), json.dumps(tracks[0], indent=1))",
+     "args": null,
+     "output": "{\n \"schema_version\": \"1.0\",\n \"event_id\": \"evt_bcbb073c16ea4feb8b387e958f341ee1\",\n \"trigger_ts\": 1790511791.28,\n \"camera_id\": \"warehouse_aisle_01\",\n \"rule_id\": \"intrusion_forklift_aisle\",\n \"severity_hint\": \"high\",\n \"metrics\": {\n  \"min_distance_m\": null,\n  \"duration_s\": 3.0,\n  \"closing_speed_mps\": null\n },\n \"involved_track_ids\": [\n  9\n ],\n \"track_window_ref\": \"incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/tracks.jsonl\",\n \"clip_ref\": \"incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/clip.mp4\",\n \"cooldown_key\": \"warehouse_aisle_01:intrusion_forklift_aisle:9\",\n \"calibration_quality\": {\n  \"rms_px\": 9999.0,\n  \"valid\": false\n }\n}\n83 {\n \"schema_version\": \"1.0\",\n \"camera_id\": \"warehouse_aisle_01\",\n \"frame_ts\": 1790511786.36,\n \"seq\": 84,\n \"calibration_quality\": {\n  \"rms_px\": 9999.0,\n  \"valid\": false\n },\n \"tracks\": []\n}",
+     "status": "ok",
+     "ms": 19
+    },
+    {
+     "kind": "tool",
+     "tool": "ipython",
+     "code": "for t in tracks:\n    if t.get('tracks'):\n        print(t['frame_ts'], t['seq'], json.dumps(t['tracks']))\n",
+     "args": null,
+     "output": null,
+     "status": null,
+     "ms": null
+    },
+    {
+     "kind": "tool",
+     "tool": "ipython",
+     "code": "occ = [t for t in tracks if any(tr.get('track_id')==9 for tr in t.get('tracks',[]))]\nzones = {tuple(tr.get('zone_ids',[])) for t in occ for tr in t['tracks'] if tr.get('track_id')==9}\nclasses = {tr.get('cls') for t in occ for tr in t['tracks'] if tr.get('track_id')==9}\nids = {tr.get('track_id') for t in tracks for tr in t.get('tracks',[])}\nprint(len(occ), occ[0]['frame_ts'], occ[-1]['frame_ts'], occ[-1]['frame_ts']-occ[0]['frame_ts'])\nprint(zones, classes, ids)",
+     "args": null,
+     "output": null,
+     "status": null,
+     "ms": null
+    },
+    {
+     "kind": "tool",
+     "tool": "ipython",
+     "code": "res = {\"verified_min_distance_m\": None, \"closing_velocity_mps\": None, \"ttc_s\": None,\n       \"classification\": \"false_positive\",\n       \"recompute_inputs\": {\"track_a\": \"9\", \"track_b\": \"\", \"frames_used\": \"67\"}}\njson.dump(res, open('result.json','w'), indent=2)\nprint(open('result.json').read())",
+     "args": null,
+     "output": "{\n  \"verified_min_distance_m\": null,\n  \"closing_velocity_mps\": null,\n  \"ttc_s\": null,\n  \"classification\": \"false_positive\",\n  \"recompute_inputs\": {\n    \"track_a\": \"9\",\n    \"track_b\": \"\",\n    \"frames_used\": \"67\"\n  }\n}",
+     "status": "ok",
+     "ms": 18
+    },
+    {
+     "kind": "thought",
+     "text": "Classification: false_positive — track 9 is present (67 frames, ~7.9 s) but it is a person in zone \"cross_aisle_west\", not a forklift in the aisle, so the \"intrusion_forklift_aisle\" claim does not hold up; result.json is written with null distance/velocity/ttc."
+    },
+    {
+     "kind": "thought",
+     "text": "The task is complete and no open question remains. Verified state:\n\n- event.json: rule `intrusion_forklift_aisle`, track 9, claimed duration 3.0 s.\n- tracks.jsonl: track 9 appears in 67 frames (1790511788.28–1790511796.2, ~7.9 s), class `person`, zone `cross_aisle_west`. No forklift track exists anywhere in the window.\n- The claimed condition (forklift intrusion into the aisle) is not supported: wrong actor class and wrong zone. Classification: `false_positive`.\n- `result.json` written to the incident directory with null min_distance/closing_velocity/ttc, classification `false_positive`, and `recompute_inputs` = {\"track_a\": \"9\", \"track_b\": \"\", \"frames_used\": \"67\"}.\n\nNothing further to do; the run is finished from my side."
+    },
+    {
+     "kind": "tool",
+     "tool": "ipython",
+     "code": "import os, json\np = 'result.json'\nprint(os.path.exists(p), os.path.getsize(p))\nprint(json.load(open(p)))",
+     "args": null,
+     "output": "True 226\n{'verified_min_distance_m': None, 'closing_velocity_mps': None, 'ttc_s': None, 'classification': 'false_positive', 'recompute_inputs': {'track_a': '9', 'track_b': '', 'frames_used': '67'}}",
+     "status": "ok",
+     "ms": 3
+    },
+    {
+     "kind": "thought",
+     "text": "All work is done and verified with code execution:\n\n- `result.json` exists on disk (226 bytes) in `incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/` and contains exactly the required shape: null min distance/closing velocity/ttc, classification `false_positive`, and `recompute_inputs` {\"track_a\": \"9\", \"track_b\": \"\", \"frames_used\": \"67\"}.\n- Evidence basis: track 9 appears in 67 frames of tracks.jsonl as class `person` in zone `cross_aisle_west`; no forklift track exists, so the `intrusion_forklift_aisle` claim does not hold.\n\nClassification: `false_positive`. There is no remaining work; awaiting verifier/evaluator completion."
+    }
+   ]
+  }
+ }
+]

@@ -166,3 +166,21 @@ export function formatClock(t: number): string {
   const s = Math.max(0, t)
   return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`
 }
+
+// agent/transcript.py's compact transcript of one prime-agent session.
+export interface TranscriptStep {
+  kind: 'thought' | 'tool'
+  text?: string
+  tool?: string | null
+  code?: string | null
+  args?: Record<string, unknown> | null
+  output?: string | null
+  status?: string | null
+  ms?: number | null
+}
+
+export interface AgentTranscript {
+  turns: number
+  model: string | null
+  steps: TranscriptStep[]
+}

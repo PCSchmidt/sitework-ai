@@ -4,7 +4,7 @@
 
 | Level | What | Tooling |
 | --- | --- | --- |
-| Unit | schemas, geometry (homography known-answer tests), rule engine (synthetic tracklets), adapter serialization | pytest, fast, no GPU — 155 run offline |
+| Unit | schemas, geometry (homography known-answer tests), rule engine (synthetic tracklets), adapter serialization | pytest, fast, no GPU — 164 run offline |
 | Integration | API/repository/persistence round-trips against a real Postgres | pytest `@pytest.mark.integration` — 27 tests; skip without a DB, run for real in CI's Postgres service. The originally planned "detector on a fixture image → … → API" compose-level test was not built; `scripts/smoke_test.py` (§6) covers trigger → agent (stubbed) → Postgres → WS by hand |
 | Contract | golden RPC session vs pinned prime-agent; schema compat between TS/Py | CI `contract-agent.yaml` (golden replay); CI `ci.yaml` fails if the exported JSON Schemas in `schemas/` are stale |
 | E2E replay | recorded tracklet fixtures replayed over WS; snapshot dashboard states | **not built** -- `ui`'s `npm test` runs 6 vitest unit tests (M7: the camera overlay's frame lookup, homography and closest-pair helpers), no component or snapshot tests; the closest real thing is `scripts/replay_demo.py` (M6), which replays fixtures into the real API/DB/WS path for a live demo, not as an automated dashboard-snapshot test (its own logic has 7 unit tests in `tests/test_replay_demo.py`) |

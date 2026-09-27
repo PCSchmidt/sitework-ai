@@ -211,8 +211,23 @@ async def test_postgres_persister_writes_incident_and_agent_run(
     assert stored.classification == "near_miss"
 
     async with pg_pool.acquire() as conn:
-        run_row = await conn.fetchrow(
-            "SELECT * FROM agent_runs WHERE event_id = $1", "evt_test"
-        )
+        run_row = await conn.fetchrow("SELECT * FROM agent_runs WHERE event_id = $1", "evt_test")
     assert run_row is not None
     assert run_row["status"] == "confirmed"
+
+
+def test_prompt_carries_the_fired_rules_definition() -> None:
+    from agent.worker import build_prompt
+    from pipelines.config.loader import load_rules
+    from pipelines.schemas import TriggerEvent
+
+    event = TriggerEvent.model_validate_json(_event_payload("evt_prompt")["payload"]).model_copy(
+        update={"rule_id": "intrusion_forklift_aisle", "involved_track_ids": [9]}
+    )
+    prompt = build_prompt(event, load_rules())
+    assert "Pedestrian inside a forklift-only aisle" in prompt
+    assert "dwell_s=3.0" in prompt
+    assert "cross_aisle_west" in prompt
+    # inserted ahead of the task, and the task text is intact
+    assert prompt.index("definition:") < prompt.index("Files (relative")
+    assert build_prompt(event).count("definition:") == 0

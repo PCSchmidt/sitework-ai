@@ -6,15 +6,17 @@ the real dashboard playing recorded pipeline output in your browser. The full sy
 own machine with Docker (see [Quickstart](#quickstart)). Build history and every known gap:
 [docs/12-roadmap.md](docs/12-roadmap.md).
 
-![The SiteWatch dashboard: a forklift camera with live bounding boxes, a worker-to-forklift
-distance line and a 5 m exclusion rule firing; then a pedestrian in a forklift-only aisle, the
-zone rule firing, and the agent's verified verdict next to the deterministic gate's
-recheck](docs/assets/showcase.gif)
+![The live demo: the fast plane tracks a worker and a forklift with boxes and a live distance
+line until a 5 m exclusion rule fires; the video pauses, the trigger crosses to the slow plane,
+and the Prime Agent's recorded Python REPL session replays beside the video; the Band-3 gate
+rechecks it and the incident is stored as confirmed, normal operations](docs/assets/showcase.gif)
 
-*The live demo page. Boxes, track IDs, zones, distances and rule firings are drawn frame by frame
-from what the real pipeline recorded on each clip. The verdicts underneath come from real Prime
-Agent runs that passed the Band-3 gate. Nothing on the page is simulated, but it is recorded:
-a static page can't run a GPU or an LLM, so the live system stays a `make up` away.*
+*The live demo page. The strip on top is the architecture at work: **① fast plane** (computer
+vision, every frame, no AI) → **② slow plane** (the Prime Agent RLM, called only when a rule
+fires) → **③ Band-3 gate** (plain code rechecking the AI) → **④ the stored record**. Boxes,
+zones, distances and rule firings are drawn frame by frame from what the real pipeline recorded.
+The console replays the agent's real session: the Python it ran and what that code returned.
+Nothing is simulated, but it is recorded, because a static page can't run a GPU or an LLM.*
 
 ## What is this? (plain-language overview)
 
@@ -172,7 +174,7 @@ flowchart TD
 | Agent accuracy | 30 hand-labeled incidents against the real Prime Agent: 86.7% first-pass (all misses were timeouts; 100% after recalibrating the timeout), 82.1% classification agreement ([eval](docs/eval-m5-agent-slow-path.md)) |
 | Agent cost | ~43–56 K tokens and ~$0.002 per incident on a GLM-Flash-class model |
 | Cloud | Validated Terraform for AWS, GCP, and Azure (`fmt`/`validate` in CI), deliberately never applied ([ADR-004](docs/adr/ADR-004-documentation-only-cloud-deployment.md)) |
-| Tests | 182 Python (155 offline, 27 against a real Postgres in CI) + 6 dashboard unit tests |
+| Tests | 191 Python (164 offline, 27 against a real Postgres in CI) + 6 dashboard unit tests |
 
 ## Architecture at a glance
 
@@ -250,9 +252,15 @@ Where things live:
 
 ### 0. Just look (nothing to install)
 
-Open the **[live demo](https://pcschmidt.github.io/sitework-ai/)**. The **Incidents** tab plays
-each incident's clip cued a few seconds before its rule fires, then shows the fast plane's
-measurement, the agent's verdict, and the gate's recheck side by side. The **Cameras** tab plays
+Open the **[live demo](https://pcschmidt.github.io/sitework-ai/)**. Above every video, a
+four-stage strip shows which plane is working: **① fast plane → ② slow plane (Prime Agent RLM)
+→ ③ Band-3 gate → ④ stored record**. The fast plane is live on every frame. When a rule fires,
+the video pauses, the trigger crosses to the slow plane, and the console beside the video
+replays the agent's real session: its reasoning, the Python it ran in its REPL, and what that
+code returned, including its own mistakes. Then the gate rechecks and the record lands. On the
+aisle incident, switch to the **earlier run** to watch the gate catch the agent misreading the
+rule and send the incident to a human instead. The **Incidents** tab cues each incident's clip
+a few seconds before its rule fires. The **Cameras** tab plays
 every camera with the detection overlay. Hover a box for its floor position and speed, toggle
 the layers, and watch the top-down floor plan. The page is a static build of the same React
 dashboard; `make showcase` then `make showcase-agent` regenerate everything it plays.
@@ -276,7 +284,7 @@ path was tested from a fresh clone on 2026-09-26.
 
 ```bash
 uv sync                # note: pulls CUDA-enabled PyTorch, a multi-GB download
-uv run pytest          # 155 tests offline; 27 more run when TEST_DATABASE_URL points at Postgres
+uv run pytest          # 164 tests offline; 27 more run when TEST_DATABASE_URL points at Postgres
 ```
 
 ### 3. Run the full pipeline on video (NVIDIA GPU required)
@@ -386,12 +394,19 @@ All reproducible from this repo; see [Verify the claims](#verify-the-claims-a-re
   calibration and rules ran on every frame, then real Prime Agent sessions and the gate ran on
   each trigger. The dock warning fired at 4.20 m (5 m rule); the agent recomputed 4.20 m and
   classified it normal operations. The aisle intrusion fired after 3.0 s in the zone; the agent
-  confirmed a violation. On its **first** run, though, the agent called that intrusion a false
-  positive despite about 8 s of in-zone evidence, and the gate had no zone check to catch it.
-  That gap is now closed (see [the gate](#the-referee-the-band-3-gate)). Building the demo also
-  surfaced three real fast-plane bugs, all fixed with tests: cooldowns shared across rules of the
-  same kind (so a warning could mute a tighter rule), speed limits applied to pedestrians, and
-  jittery 0.1 s speed estimates ([docs/12 M7](docs/12-roadmap.md)).
+  confirmed a violation. Getting there was the most instructive part of the build. The agent
+  first called that intrusion a false positive, and the gate had no zone check to catch it.
+  After a zone check was added to the gate, the agent made the same mistake again, and **the
+  gate caught it** and sent the incident to review. The recorded transcript then showed why: the
+  agent only saw the rule's id, `intrusion_forklift_aisle`, and read it as "a forklift
+  intruding". The prompt now includes each rule's definition, and the next run was right. Along
+  the way the demo also surfaced four other real bugs, all fixed with tests:
+  - cooldowns shared across rules of the same kind, so a warning could mute a tighter rule
+  - speed limits applied to pedestrians
+  - jittery 0.1 s speed estimates
+  - the agent's RPC pipe garbling non-ASCII text on Windows
+
+  Details in [docs/12 M7](docs/12-roadmap.md).
 - **Calibration:** the first two methods validated on real phone footage, catching two bugs (a sign
   ambiguity in the vanishing-point math, and a rotation tolerance too strict for real-world line
   picks). A later cross-platform CI failure exposed that the sign fix was itself incomplete, and
@@ -399,7 +414,7 @@ All reproducible from this repo; see [Verify the claims](#verify-the-claims-a-re
 - **Cloud:** all three Terraform environments validate. Running `terraform validate` for real
   caught three bugs in the source specs (a dangling reference, a name Azure rejects, a wrong
   argument name), fixed in both the code and the runbooks.
-- **Quality gates:** 182 Python tests (155 offline + 27 Postgres) and 6 dashboard tests; ruff,
+- **Quality gates:** 191 Python tests (164 offline + 27 Postgres) and 6 dashboard tests; ruff,
   mypy, UI type-check and build clean, all green in CI.
 
 ## Limitations
@@ -418,9 +433,10 @@ All reproducible from this repo; see [Verify the claims](#verify-the-claims-a-re
   genuine close call.
 - **The detector has blind spots.** It is COCO-trained, so it has no forklift class (trucks stand
   in as "heavy vehicle") and no excavator class: on the yard clip only the cab operator is boxed.
-- **The agent is nondeterministic.** The same aisle incident got `false_positive` once and
-  `violation` twice. The gate now catches that particular contradiction for zone rules, but a
-  plausible wrong judgment inside the allowed classes (e.g. normal ops vs near miss) still passes.
+- **The agent is nondeterministic, and the gate only checks what it can recompute.** The same
+  aisle incident has been answered both ways. The gate catches a verdict that contradicts the
+  recomputed distance or zone dwell. It can't catch a plausible wrong judgment between allowed
+  classes (e.g. normal ops vs near miss), and speed verdicts aren't gated at all.
 - **No alarm output.** Rules fire in milliseconds, but nothing sounds an alarm off them. A person
   sees an incident on the dashboard only after the ~1-minute agent verification. A consumer on
   the `trigger_events` stream is the missing piece ([docs/02 §3](docs/02-system-architecture.md)).
@@ -473,7 +489,7 @@ validated, never applied.
 ### Verify the claims (a reviewer's path)
 
 ```bash
-uv run pytest -q                          # 155 offline; 182 with TEST_DATABASE_URL set
+uv run pytest -q                          # 164 offline; 191 with TEST_DATABASE_URL set
 uv run ruff check . && uv run mypy        # lint + types
 uv run python scripts/check_docs.py       # cross-document consistency checks
 make replay-up                            # the dashboard at http://localhost:5173

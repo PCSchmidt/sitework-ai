@@ -1,8 +1,32 @@
 import { useEffect, useState } from 'react'
+import { fetchIncident } from '../api'
 import { formatClock, type Showcase } from '../showcase/model'
-import { useShowcase, useShowcaseIndex } from '../showcase/useShowcase'
+import {
+  useAgentTranscript,
+  useEarlierRuns,
+  useShowcase,
+  useShowcaseIndex,
+} from '../showcase/useShowcase'
+import type { IncidentRecord } from '../types'
 import { ShowcasePlayer, type SeekRequest } from './ShowcasePlayer'
 import { SiteMap } from './SiteMap'
+import { AgentConsole, PlaneStrip, RunPicker, useSlowPlaneReplay } from './TwoPlanes'
+
+function useIncident(eventId: string | null): IncidentRecord | null {
+  const [incident, setIncident] = useState<IncidentRecord | null>(null)
+  useEffect(() => {
+    setIncident(null)
+    if (!eventId) return
+    let live = true
+    fetchIncident(eventId)
+      .then((i) => live && setIncident(i))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [eventId])
+  return incident
+}
 
 export function CamerasView({ initialCamera }: { initialCamera?: string | null }) {
   const { rows, error } = useShowcaseIndex()
@@ -10,6 +34,19 @@ export function CamerasView({ initialCamera }: { initialCamera?: string | null }
   const { showcase, error: loadError } = useShowcase(cameraId)
   const [time, setTime] = useState(0)
   const [seek, setSeek] = useState<SeekRequest | null>(null)
+  const event = showcase?.events[0] ?? null
+  const latestIncident = useIncident(event?.event_id ?? null)
+  const latestTranscript = useAgentTranscript(event?.event_id ?? null)
+  const earlier = useEarlierRuns(event?.event_id ?? null)
+  const [run, setRun] = useState(0)
+  const incident = run > 0 && earlier[run - 1] ? earlier[run - 1].incident : latestIncident
+  const transcript = run > 0 && earlier[run - 1] ? earlier[run - 1].transcript : latestTranscript
+  const replay = useSlowPlaneReplay(event, time, transcript, incident)
+  useEffect(() => setRun(0), [cameraId])
+  const pickRun = (i: number) => {
+    setRun(i)
+    if (event) setSeek({ t: Math.max(0, event.t - 3), nonce: Date.now() })
+  }
 
   useEffect(() => {
     if (!cameraId && rows && rows.length > 0) setCameraId(rows[0].camera_id)
@@ -58,22 +95,34 @@ export function CamerasView({ initialCamera }: { initialCamera?: string | null }
 
       {loadError && <p className="text-sm text-red-400">Could not load recording: {loadError}</p>}
       {showcase && (
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-4">
+          <div className="xl:col-span-2 flex flex-col gap-2">
+            <RunPicker earlier={earlier} selected={run} onSelect={pickRun} />
+            <PlaneStrip showcase={showcase} time={time} event={event} incident={incident} replay={replay} />
+          </div>
           <div className="flex flex-col gap-3 min-w-0">
             <ShowcasePlayer key={showcase.camera_id} showcase={showcase} seek={seek} onTime={setTime} />
             {showcase.note && <p className="text-sm text-slate-400">{showcase.note}</p>}
-          </div>
-          <div className="flex flex-col gap-3 min-w-0">
-            <div>
-              <div className="text-xs text-slate-500 mb-1">Floor plan (meters, from the calibration)</div>
-              <div className="aspect-square xl:aspect-auto xl:h-[340px]">
-                <SiteMap showcase={showcase} time={time} />
-              </div>
-            </div>
             <EventList
               showcase={showcase}
               onSeek={(t) => setSeek({ t: Math.max(0, t - 2.5), nonce: Date.now() })}
             />
+          </div>
+          <div className="flex flex-col gap-3 min-w-0">
+            <AgentConsole
+              showcase={showcase}
+              event={event}
+              incident={incident}
+              transcript={transcript}
+              replay={replay}
+              className="h-[360px]"
+            />
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Floor plan (meters, from the calibration)</div>
+              <div className="aspect-square xl:aspect-auto xl:h-[300px]">
+                <SiteMap showcase={showcase} time={time} />
+              </div>
+            </div>
           </div>
           <div className="xl:col-span-2">
             <CameraFacts showcase={showcase} />

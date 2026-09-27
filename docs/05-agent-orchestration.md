@@ -10,8 +10,10 @@ embedded*.
 > - **One agent role, one prompt per incident.** `agent/worker.py` pops a `TriggerEvent`, starts
 >   a fresh `prime-agent --mode rpc` process for that incident, and sends one self-contained
 >   prompt: `agent/prompts/trajectory_inspector.md` for two-track proximity triggers,
->   `generic_classification.md` for zone/speed triggers. The agent answers by running Python in
->   its REPL against `tracks.jsonl` and writing `result.json`.
+>   `generic_classification.md` for zone/speed triggers. Since M7 the prompt also carries the
+>   fired rule's definition, zones and thresholds from `config/rules.yaml` (without it, the agent
+>   misread a rule from its id; docs/12 M7). The agent answers by running Python in its REPL
+>   against `tracks.jsonl` and writing `result.json`.
 > - **What Prime Agent capabilities are used:** the persistent Python REPL (code-executed
 >   verification), headless RPC mode, and `get_session_stats` for token/turn accounting.
 > - **Not used:** registered harness sub-agent specs (§2; `agent/harness/` is empty), explicit
@@ -133,6 +135,10 @@ one incident at a time; no queue-depth alarm or autoscaling exists.
 - Rejection events (schema or cross-check failure) are first-class metrics — the false-positive
   rate of the whole cognitive plane is dashboard-visible.
 - All prompts and outputs stored under `/workspace/incidents/{event_id}/` for replay and eval.
+  As built: `event.json`, `tracks.jsonl`, `result.json` and, since M7, `agent_transcript.json`
+  (the agent's reasoning, every REPL cell it ran and each output; `agent/transcript.py`). The
+  prompt text itself isn't written, but `agent.worker.build_prompt` regenerates it exactly from
+  the event and rules config.
 
 ## 8. needs_review Workflow
 

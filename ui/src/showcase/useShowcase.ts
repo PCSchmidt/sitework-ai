@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { assetUrl } from '../config'
-import type { Showcase, ShowcaseIndexRow } from './model'
+import type { IncidentRecord } from '../types'
+import type { AgentTranscript, Showcase, ShowcaseIndexRow } from './model'
 
 const cache = new Map<string, Promise<Showcase>>()
 let indexPromise: Promise<ShowcaseIndexRow[]> | null = null
@@ -58,4 +59,53 @@ export function useShowcase(cameraId: string | null) {
     }
   }, [cameraId])
   return { showcase, error }
+}
+
+const transcripts = new Map<string, Promise<AgentTranscript | null>>()
+
+/** The recorded agent transcript for an incident, or null if none was captured. */
+export function useAgentTranscript(eventId: string | null) {
+  const [transcript, setTranscript] = useState<AgentTranscript | null>(null)
+  useEffect(() => {
+    setTranscript(null)
+    if (!eventId) return
+    let p = transcripts.get(eventId)
+    if (!p) {
+      p = fetch(assetUrl(`showcase/evidence/${eventId}/agent_transcript.json`))
+        .then((r) => (r.ok ? (r.json() as Promise<AgentTranscript>) : null))
+        .catch(() => null)
+      transcripts.set(eventId, p)
+    }
+    let live = true
+    p.then((t) => live && setTranscript(t))
+    return () => {
+      live = false
+    }
+  }, [eventId])
+  return transcript
+}
+
+export interface EarlierRun {
+  label: string
+  note: string
+  incident: IncidentRecord
+  transcript: AgentTranscript | null
+}
+
+/** Earlier recorded agent runs of the same incident (e.g. one the gate caught), if any. */
+export function useEarlierRuns(eventId: string | null): EarlierRun[] {
+  const [runs, setRuns] = useState<EarlierRun[]>([])
+  useEffect(() => {
+    setRuns([])
+    if (!eventId) return
+    let live = true
+    fetch(assetUrl(`showcase/evidence/${eventId}/earlier_runs.json`))
+      .then((r) => (r.ok ? (r.json() as Promise<EarlierRun[]>) : []))
+      .then((list) => live && setRuns(Array.isArray(list) ? list : []))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [eventId])
+  return runs
 }

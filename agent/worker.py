@@ -22,6 +22,7 @@ callers (tests, or direct use) that don't want a database.
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import time
@@ -30,7 +31,7 @@ from string import Template
 
 import redis
 from pipelines.broker.streams import TRIGGER_STREAM_KEY, ConsumerGroupReader
-from pipelines.config.loader import RulesConfig, load_rules
+from pipelines.config.loader import Rule, RulesConfig, load_rules
 from pipelines.schemas import (
     AgentRunStats,
     IncidentRecord,
@@ -42,6 +43,7 @@ from pipelines.schemas import (
 from agent.band3 import check as band3_check
 from agent.persistence import NullPersister, Persister
 from agent.prime_adapter import PrimeAdapter, PrimeAgentError, PrimeAgentTimeout
+from agent.transcript import compact_transcript
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +58,7 @@ PROMPT_DIR = Path(__file__).parent / "prompts"
 _TRAJECTORY_TEMPLATE = Template(
     (PROMPT_DIR / "trajectory_inspector.md").read_text(encoding="utf-8")
 )
-_GENERIC_TEMPLATE = Template(
-    (PROMPT_DIR / "generic_classification.md").read_text(encoding="utf-8")
-)
+_GENERIC_TEMPLATE = Template((PROMPT_DIR / "generic_classification.md").read_text(encoding="utf-8"))
 
 
 def _to_agent_run_stats(stats: dict[str, object] | None, wall_ms: int) -> AgentRunStats | None:
@@ -81,18 +81,54 @@ def _to_agent_run_stats(stats: dict[str, object] | None, wall_ms: int) -> AgentR
     )
 
 
-def build_prompt(event: TriggerEvent) -> str:
+def _rule_block(rule: Rule) -> str:
+    """What the rule that fired actually means, from config/rules.yaml.
+
+    Without it the agent only sees the rule id and has to guess its meaning from the
+    wording -- which it got wrong at M7 (read `intrusion_forklift_aisle`, a *pedestrian*
+    in a forklift-only aisle, as "a forklift intruding" and called a real intrusion a
+    false positive; docs/12 M7).
+    """
+    thresholds = ", ".join(
+        f"{name}={value}"
+        for name, value in (
+            ("radius_m", rule.radius_m),
+            ("duration_s", rule.duration_s),
+            ("dwell_s", rule.dwell_s),
+            ("limit_mps", rule.limit_mps),
+        )
+        if value is not None
+    )
+    return (
+        "The rule that fired (config/rules.yaml). This definition is what the rule means; "
+        "judge the evidence against it, not against the wording of the rule id:\n"
+        f"- id: {rule.id}\n"
+        f"- kind: {rule.kind}\n"
+        f"- definition: {rule.description}\n"
+        f"- zones: {', '.join(rule.zone_ids) or 'anywhere'}\n"
+        f"- thresholds: {thresholds or 'none'}\n\n"
+    )
+
+
+def build_prompt(event: TriggerEvent, rules: RulesConfig | None = None) -> str:
     """Proximity-class triggers (exactly two involved tracks) get the
     pairwise-distance verification prompt validated in spike-01; everything
     else (zone_intrusion, speed) gets the single-track sanity-check prompt --
-    there's no pairwise distance for those rule kinds to recompute."""
+    there's no pairwise distance for those rule kinds to recompute. With
+    `rules`, the fired rule's definition is inserted ahead of the task."""
     if len(event.involved_track_ids) == 2:
         track_a, track_b = event.involved_track_ids
-        return _TRAJECTORY_TEMPLATE.substitute(
+        prompt = _TRAJECTORY_TEMPLATE.substitute(
             event_id=event.event_id, track_a=track_a, track_b=track_b
         )
-    solo_track: int | str = event.involved_track_ids[0] if event.involved_track_ids else ""
-    return _GENERIC_TEMPLATE.substitute(event_id=event.event_id, track_a=solo_track)
+    else:
+        solo_track: int | str = event.involved_track_ids[0] if event.involved_track_ids else ""
+        prompt = _GENERIC_TEMPLATE.substitute(event_id=event.event_id, track_a=solo_track)
+    rule = next((r for r in rules.rules if r.id == event.rule_id), None) if rules else None
+    if rule is None:
+        return prompt
+    head, sep, tail = prompt.partition("Files (relative")
+    return head + _rule_block(rule) + sep + tail if sep else prompt + "\n\n" + _rule_block(rule)
 
 
 class AgentWorker:
@@ -165,7 +201,7 @@ class AgentWorker:
         if clip_src.exists():
             shutil.copyfile(clip_src, incident_dir / "clip.mp4")
 
-        prompt = build_prompt(event)
+        prompt = build_prompt(event, self.rules)
 
         start = time.monotonic()
         with PrimeAdapter(cwd=incident_dir) as adapter:
@@ -180,6 +216,10 @@ class AgentWorker:
                 return self._needs_review(event, f"prime-agent process error: {exc}")
         wall_ms = int((time.monotonic() - start) * 1000)
         agent_run = _to_agent_run_stats(prompt_result.stats, wall_ms)
+        # audit trail: the code the agent ran and what it returned, beside the evidence
+        (incident_dir / "agent_transcript.json").write_text(
+            json.dumps(compact_transcript(prompt_result.events), indent=1), encoding="utf-8"
+        )
 
         result_path = incident_dir / "result.json"
         if not result_path.exists():

@@ -117,6 +117,9 @@ class PrimeAdapter:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            # prime-agent speaks UTF-8 JSON lines; without this, Windows hosts use the
+            # locale code page (cp1252) and garble every non-ASCII character both ways
+            encoding="utf-8",
             bufsize=1,
         )
         self._out_q = queue.Queue()

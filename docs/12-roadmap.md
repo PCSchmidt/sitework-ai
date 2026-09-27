@@ -553,16 +553,41 @@ firing) and the dual-plane verdict, at a public URL.
   7 cm, so a ~1 m/s walk read up to 3–6 m/s at the 90th percentile, and a new forklift track
   briefly read 2.5 m/s. Velocity is now the displacement over a ~1 s window, reported only once
   at least 0.5 s of history exists (`pipeline.VELOCITY_WINDOW_S`).
-- **The agent misclassified a clear intrusion, and the gate couldn't catch it.** First run on the
-  aisle incident: `false_positive`, although track 9 is in the zone for about 8 s of the window
-  (the rule fired at a dwell of 2.9999998 s from float epoch math, a plausible trigger for a
-  strict recheck; the transcript wasn't captured). Two later runs on identical evidence returned
-  `violation`. Band-3 only checked proximity, so zone verdicts passed on schema alone (docs/06
+- **The agent misclassified a clear intrusion, and at first the gate couldn't catch it.** First
+  run on the aisle incident: `false_positive`, although track 9 is in the zone for about 8 s of
+  the window. Band-3 only checked proximity, so zone verdicts passed on schema alone (docs/06
   §3). **Fixed:** the gate now recomputes the continuous in-zone dwell at the trigger and rejects
   `violation` without it or `false_positive` despite it (0.2 s tolerance). The fast path's own
   `duration_s` claim is deliberately not gated, so the six zone eval fixtures, where the agent
   must refute a wrong fast-path claim, still reach `confirmed`. That is asserted per fixture in
-  `tests/test_band3.py`. The showcase record is from a fresh run under the new gate.
+  `tests/test_band3.py`. Of the next three runs, one again answered `false_positive`, and this
+  time **the new gate rejected it** (`needs_review`: "recompute shows track 9 in
+  ['cross_aisle_west'] for 3.00s… meeting the 3.0s dwell limit").
+- **Root cause, found once transcripts were recorded: the prompt never said what the rule
+  means.** The agent only saw the id `intrusion_forklift_aisle` and reasoned "track 9 is a
+  person… not a forklift in the aisle, so the claim does not hold". The rule actually means a
+  *pedestrian* inside a forklift-only aisle. **Fixed:** `build_prompt` now inserts the fired
+  rule's definition, zones and thresholds from `config/rules.yaml` ahead of the task
+  (`tests/test_worker.py`). The next run returned `violation`, confirmed. The caught run is kept
+  as a labelled earlier run (`evidence/{id}/earlier_runs.json`), so the dashboard can show the gate
+  doing its job.
+- **Agent transcripts are now recorded** (`agent/transcript.py`): the worker writes
+  `agent_transcript.json` beside each incident's evidence. It holds the agent's reasoning text,
+  every Python cell it ran in its REPL, and each real output or error, reduced from the ~1,200
+  raw RPC events of a run. Tested against the golden session. This is what made the root cause
+  above findable.
+- **The RPC pipe garbled non-ASCII text on Windows.** `PrimeAdapter` opened prime-agent with
+  `text=True` and no encoding, so on Windows both directions used cp1252 while prime-agent
+  speaks UTF-8 (every em dash in the prompts and replies came back as `â€”`). The Linux
+  containers default to UTF-8, so this only affected Windows hosts. The pipe is now explicitly
+  UTF-8, with a round-trip regression test through the fake agent, which now speaks raw UTF-8
+  like the real one.
+- **The dual-plane architecture is now visible in the UI**, not just described. A four-stage
+  strip (fast plane → slow plane → Band-3 gate → record) sits above every player and follows
+  the video: the fast plane is live until the rule fires; then the trigger crosses over and the
+  agent console replays the recorded REPL session (compressed, with the real duration, turns and
+  tokens shown). The gate's recheck and the stored outcome follow. Cameras with no firing show
+  the slow plane idle, with "the agent never ran ($0)".
 - **No genuine close call in the footage.** The dock worker's closest approach to the forklift is
   4.2 m, so the existing 3 m rule correctly never fires. The demo site adds a conservative 5 m
   warning tier (`exclusion_mobile_plant_dock`, severity `medium`, via a new optional per-rule
