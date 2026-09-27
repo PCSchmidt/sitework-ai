@@ -24,7 +24,8 @@ sitework-ai/
 ├── pipelines/
 │   ├── ingestion/                    # MP4→RTSP streamer config, MediaMTX setup, frame source
 │   ├── vision/                       # detector.py, tracker.py, rules.py, pipeline.py, evidence.py
-│   ├── geometry/                     # homography, vanishing_point.py, calibrate.py (manual tool)
+│   ├── geometry/                     # homography, vanishing_point.py, level_camera.py, motion.py,
+│   │                                  # calibrate.py (CLI for all three methods)
 │   ├── broker/                       # Redis Streams retention/consumer-group hardening
 │   └── schemas/                      # Pydantic v2 single source of truth
 ├── agent/
@@ -38,7 +39,8 @@ sitework-ai/
 │   └── harness/                      # sub-agent specs, memories (mounted into the agent
 │                                      # container's non-root home, e.g. /home/node/.prime)
 ├── api/                              # FastAPI app (REST + WS), asyncpg
-├── ui/                               # React + Vite + Tailwind dashboard, canvas site map
+├── ui/                               # React + Vite + Tailwind dashboard, camera overlay + floor plan;
+│                                      # public/showcase/ = recorded clips + output the Pages demo plays
 ├── evaluation/
 │   ├── benchmark_models.py           # FPS/latency/VRAM matrix
 │   ├── eval_tracking.py              # MOTA/IDF1 vs ground truth
@@ -54,7 +56,7 @@ sitework-ai/
 ├── assets/clips/                     # pinned demo clips + licenses
 ├── data/manifests/                   # dataset versions, licenses, SHA256
 ├── scripts/                          # check_docs.py, smoke_test.py, record_golden_session.py,
-│                                      # replay_demo.py ($0 public demo, M6)
+│                                      # replay_demo.py ($0 public demo, M6), showcase_agent.py (M7)
 ├── tests/                            # unit / integration / contract tests; fixtures/ holds the
 │                                      # captured golden prime-agent RPC session
 └── .github/workflows/                # ci.yaml, iac-check.yaml, contract-agent.yaml, eval.yaml
@@ -86,6 +88,7 @@ sitework-ai/
 | Workflow | Trigger | Jobs |
 | --- | --- | --- |
 | `ci.yaml` | PR/push | ruff + mypy + pytest (unit); ui lint/vitest; `docker compose config` validity; schema compat check |
+| `pages.yaml` | push to main touching `ui/`, or manual | builds the dashboard with `VITE_STATIC_DEMO=1` and publishes it to GitHub Pages (<https://pcschmidt.github.io/sitework-ai/>) (M7) |
 | `iac-check.yaml` | PR touching `deploy/` | `terraform fmt -check` + `terraform validate` across aws/gcp/azure envs (no apply, ever) |
 | `eval.yaml` | manual dispatch | headless benchmark run on self-hosted GPU runner; posts summary; artifact: `docs/benchmarks.md` diff |
 | `contract-agent.yaml` | PR/push touching `agent/`, the contract test, or its fixtures | replays a real, captured `prime-agent` RPC transcript (`tests/fixtures/golden_prime_agent_session.jsonl`, `scripts/record_golden_session.py`) against `PrimeAdapter` (feasibility guard, F1). Does not drive the live CLI -- prime-agent still isn't installable in CI (private-registry gap, spike-01 Finding 1); this catches adapter-side regressions, not prime-agent protocol drift. Built 2026-09-17, after the M3 eval set closed M3 |
@@ -101,4 +104,6 @@ make test        # unit + integration + contract tests
 make iac         # terraform fmt -check && validate for all three clouds
 make report      # regenerate docs/benchmarks.md + shift-report samples
 make replay-up   # $0 public demo stack: postgres + api + ui + fixture replay, no GPU/LLM (M6)
+make showcase    # record the demo clips for the dashboard's camera player (GPU, M7)
+make showcase-agent  # real prime-agent + Band-3 on the recorded incidents (M7)
 ```

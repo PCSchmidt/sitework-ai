@@ -1,0 +1,76 @@
+[
+ {
+  "schema_version": "1.0",
+  "event_id": "evt_bcbb073c16ea4feb8b387e958f341ee1",
+  "camera_id": "warehouse_aisle_01",
+  "trigger_ts": 1790511791.28,
+  "severity": "high",
+  "state": "confirmed",
+  "classification": "violation",
+  "verified_kinematics": {
+   "verified_min_distance_m": null,
+   "closing_velocity_mps": null,
+   "ttc_s": null,
+   "classification": "violation",
+   "recompute_inputs": {
+    "track_a": "9",
+    "track_b": "",
+    "frames_used": "67"
+   }
+  },
+  "rejection_reason": null,
+  "narrative_md": "",
+  "rule_citations": [
+   "intrusion_forklift_aisle"
+  ],
+  "recommended_actions": [],
+  "evidence_refs": [
+   "incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/tracks.jsonl",
+   "incidents/evt_bcbb073c16ea4feb8b387e958f341ee1/clip.mp4"
+  ],
+  "agent_run": {
+   "model": "prime-agent",
+   "tokens_in": 16662,
+   "tokens_out": 1013,
+   "turns": 9,
+   "wall_ms": 39859
+  }
+ },
+ {
+  "schema_version": "1.0",
+  "event_id": "evt_a22526cb3a744a9c86aeebcb7e4d7cae",
+  "camera_id": "dock_north_01",
+  "trigger_ts": 1790511675.36,
+  "severity": "medium",
+  "state": "confirmed",
+  "classification": "normal_ops",
+  "verified_kinematics": {
+   "verified_min_distance_m": 4.202889431016628,
+   "closing_velocity_mps": 0.30156426952003124,
+   "ttc_s": 9.162500016673,
+   "classification": "normal_ops",
+   "recompute_inputs": {
+    "track_a": "1",
+    "track_b": "7",
+    "frames_used": "40"
+   }
+  },
+  "rejection_reason": null,
+  "narrative_md": "",
+  "rule_citations": [
+   "exclusion_mobile_plant_dock"
+  ],
+  "recommended_actions": [],
+  "evidence_refs": [
+   "incidents/evt_a22526cb3a744a9c86aeebcb7e4d7cae/tracks.jsonl",
+   "incidents/evt_a22526cb3a744a9c86aeebcb7e4d7cae/clip.mp4"
+  ],
+  "agent_run": {
+   "model": "prime-agent",
+   "tokens_in": 21076,
+   "tokens_out": 1959,
+   "turns": 8,
+   "wall_ms": 47032
+  }
+ }
+]

@@ -4,10 +4,10 @@
 
 | Level | What | Tooling |
 | --- | --- | --- |
-| Unit | schemas, geometry (homography known-answer tests), rule engine (synthetic tracklets), adapter serialization | pytest, fast, no GPU — 130 run offline |
+| Unit | schemas, geometry (homography known-answer tests), rule engine (synthetic tracklets), adapter serialization | pytest, fast, no GPU — 155 run offline |
 | Integration | API/repository/persistence round-trips against a real Postgres | pytest `@pytest.mark.integration` — 27 tests; skip without a DB, run for real in CI's Postgres service. The originally planned "detector on a fixture image → … → API" compose-level test was not built; `scripts/smoke_test.py` (§6) covers trigger → agent (stubbed) → Postgres → WS by hand |
 | Contract | golden RPC session vs pinned prime-agent; schema compat between TS/Py | CI `contract-agent.yaml` (golden replay); CI `ci.yaml` fails if the exported JSON Schemas in `schemas/` are stale |
-| E2E replay | recorded tracklet fixtures replayed over WS; snapshot dashboard states | **not built** -- `ui`'s `npm test` is `vitest run --passWithNoTests` (zero vitest tests exist); the closest real thing is `scripts/replay_demo.py` (M6), which replays fixtures into the real API/DB/WS path for a live demo, not as an automated dashboard-snapshot test (its own logic has 7 unit tests in `tests/test_replay_demo.py`) |
+| E2E replay | recorded tracklet fixtures replayed over WS; snapshot dashboard states | **not built** -- `ui`'s `npm test` runs 6 vitest unit tests (M7: the camera overlay's frame lookup, homography and closest-pair helpers), no component or snapshot tests; the closest real thing is `scripts/replay_demo.py` (M6), which replays fixtures into the real API/DB/WS path for a live demo, not as an automated dashboard-snapshot test (its own logic has 7 unit tests in `tests/test_replay_demo.py`) |
 | Benchmark | FPS/latency/VRAM matrix, MOTA/IDF1 | `evaluation/`, manual dispatch, GPU |
 
 ## 2. Known-Answer Tests (determinism proofs)
@@ -75,9 +75,14 @@ evidence volume with the agent (docs/12 M6).
 
 ## 7. Known gaps in coverage
 
-- **Dashboard:** `npm test` passes with zero tests (`vitest run --passWithNoTests`). The UI is
-  verified only by `tsc` + `vite build` and by manual runs.
+- **Dashboard:** 6 vitest unit tests on the overlay helpers (M7); components and pages are
+  verified only by `tsc` + `vite build` and by manual/headless-browser runs (M7's desktop, phone
+  and production-base checks were scripted with Playwright locally, not in CI).
+- **Showcase recorder:** the GPU loop in `pipelines/vision/record.py` isn't unit-tested; its pure
+  helpers are (`tests/test_record.py`), and everything it calls per frame is the live pipeline's
+  own tested code.
 - **Prompt injection:** no red-team fixture test exists (docs/11 R9, docs/08 §2).
 - **Detector in CI:** none (see §5).
 - **Full-stack end to end:** the path camera → detector → rule → evidence → agent → dashboard
-  has never been exercised as one automated test.
+  has never been exercised as one automated test. It has run end to end by hand once per demo
+  camera (M7: recorder → evidence → real `prime-agent` → Band-3 → dashboard records).

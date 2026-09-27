@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from agent.band3 import check
+import pytest
+from agent.band3 import Band3Result, check
+from pipelines.config.loader import Rule, RuleKind, RulesConfig, load_rules
 from pipelines.schemas import (
     CalibrationQuality,
     Classification,
@@ -138,3 +141,107 @@ def test_gate_skips_non_pairwise_triggers(tmp_path: Path) -> None:
     result = check(event, verdict, tracks_path)
     assert result.passed
     assert result.recomputed_min_distance_m is None
+
+
+# ---- zone_intrusion: verdict consistency with the recomputed dwell --------
+
+_ZONE_RULE = Rule(
+    id="intrusion_test",
+    kind=RuleKind.ZONE_INTRUSION,
+    description="d",
+    zone_ids=["aisle"],
+    dwell_s=3.0,
+)
+_RULES = RulesConfig(rules=[_ZONE_RULE])
+
+
+def _zone_frames(in_zone_ts: set[float]) -> list[TrackletFrame]:
+    return [
+        TrackletFrame(
+            camera_id="cam",
+            frame_ts=t,
+            seq=i,
+            calibration_quality=_CAL,
+            tracks=[
+                Track(
+                    track_id=9,
+                    cls="person",
+                    confidence=0.9,
+                    bbox_px=(0, 0, 10, 10),
+                    ground_point_m=(0.0, 0.0),
+                    state=_STATE,
+                    zone_ids=["aisle"] if t in in_zone_ts else [],
+                )
+            ],
+        )
+        for i, t in enumerate([996.0, 997.0, 998.0, 999.0, 1000.0, 1001.0])
+    ]
+
+
+def _zone_event() -> TriggerEvent:
+    return _event().model_copy(
+        update={
+            "rule_id": "intrusion_test",
+            "involved_track_ids": [9],
+            "metrics": TriggerMetrics(duration_s=3.0),
+        }
+    )
+
+
+def _zone_check(tmp_path: Path, in_zone: set[float], cls: Classification) -> Band3Result:
+    tracks_path = tmp_path / "tracks.jsonl"
+    _write_tracks(tracks_path, _zone_frames(in_zone))
+    return check(_zone_event(), KinematicsVerdict(classification=cls), tracks_path, _RULES)
+
+
+def test_zone_dwell_recompute_counts_the_run_ending_at_the_trigger(tmp_path: Path) -> None:
+    # in zone at 996, out at 997, back in 998..1001: the run at the trigger (1000) is 2 s
+    result = _zone_check(tmp_path, {996.0, 998.0, 999.0, 1000.0, 1001.0}, Classification.NORMAL_OPS)
+    assert result.recomputed_dwell_s == 2.0
+
+
+def test_zone_gate_rejects_false_positive_when_dwell_is_met(tmp_path: Path) -> None:
+    result = _zone_check(tmp_path, {997.0, 998.0, 999.0, 1000.0}, Classification.FALSE_POSITIVE)
+    assert not result.passed
+    assert "false_positive" in result.reasons[0]
+
+
+def test_zone_gate_rejects_violation_when_track_left_the_zone(tmp_path: Path) -> None:
+    result = _zone_check(tmp_path, {996.0, 997.0}, Classification.VIOLATION)
+    assert not result.passed
+    assert result.recomputed_dwell_s is None
+
+
+def test_zone_gate_passes_consistent_verdicts(tmp_path: Path) -> None:
+    met = {997.0, 998.0, 999.0, 1000.0}
+    assert _zone_check(tmp_path, met, Classification.VIOLATION).passed
+    assert _zone_check(tmp_path, {999.0, 1000.0}, Classification.FALSE_POSITIVE).passed
+    # judgment-call classes aren't gated either way
+    assert _zone_check(tmp_path, met, Classification.NORMAL_OPS).passed
+    assert _zone_check(tmp_path, set(), Classification.NEAR_MISS).passed
+
+
+def test_zone_gate_tolerates_float_dwell_just_under_the_limit(tmp_path: Path) -> None:
+    # the showcase incident: rule fired at a dwell of 2.9999998 s (float epoch math)
+    frames = _zone_frames({997.0, 998.0, 999.0, 1000.0})
+    frames[1] = frames[1].model_copy(update={"frame_ts": 997.0000002})
+    tracks_path = tmp_path / "tracks.jsonl"
+    _write_tracks(tracks_path, frames)
+    verdict = KinematicsVerdict(classification=Classification.FALSE_POSITIVE)
+    assert not check(_zone_event(), verdict, tracks_path, _RULES).passed
+
+
+_FIXTURES = Path(__file__).resolve().parents[1] / "evaluation" / "fixtures" / "incidents"
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    sorted(p.name for p in _FIXTURES.iterdir() if p.name.startswith("evt_seed_zone_")),
+)
+def test_zone_gate_accepts_every_fixtures_expected_verdict(fixture: str) -> None:
+    """The eval set's hand labels must still reach `confirmed` under the zone check."""
+    d = _FIXTURES / fixture
+    event = TriggerEvent.model_validate_json((d / "event.json").read_text(encoding="utf-8"))
+    expected = json.loads((d / "expected.json").read_text(encoding="utf-8"))
+    verdict = KinematicsVerdict(classification=expected["expected_classification"])
+    assert check(event, verdict, d / "tracks.jsonl", load_rules()).passed

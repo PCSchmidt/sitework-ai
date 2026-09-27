@@ -64,7 +64,9 @@ incident's own already-agent-written `narrative_md`, not a new scheduled agent i
 docs/05 §1's note). **Video + boxes overlay / 2D site canvas** need `frame.ticker` (live track
 positions pushed over WS), which stays unwired -- the dashboard's live incident feed, needs_review
 queue, and evidence viewer (clip playback + tracks.jsonl) are real and verified, but there is no
-live video/canvas view yet.
+live video/canvas view yet. **M7 update:** the dashboard now has a video + boxes overlay and a 2D floor plan, drawn from
+*recorded* pipeline output (`pipelines/vision/record.py` → `ui/public/showcase/`), which is what
+the GitHub Pages demo plays. The live path to feed them (`frame.ticker`) is still unbuilt.
 
 **Third gap, found and fixed 2026-09-18 while drawing `docs/13-architecture-diagrams.md`'s
 container diagram, not disclosed until now because it wasn't known until then:** the vision-to-agent

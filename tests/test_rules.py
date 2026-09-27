@@ -184,6 +184,38 @@ def test_speed_does_not_fire_under_limit() -> None:
     assert events == []
 
 
+def test_speed_ignores_people() -> None:
+    engine = RuleEngine(RulesConfig(rules=[SPEED_RULE]))
+    events = engine.process(_frame("cam1", 0.0, 0, [_track(1, "person", ["zoneA"], speed_mps=3.0)]))
+    assert events == []
+
+
+def test_warning_tier_does_not_suppress_tighter_rule_of_same_kind() -> None:
+    """A 5 m warning firing first must not put the 3 m rule for the same pair on cooldown."""
+    wide = PROXIMITY_RULE.model_copy(update={"id": "wide", "radius_m": 5.0, "cooldown_s": 120.0})
+    tight = PROXIMITY_RULE.model_copy(update={"id": "tight", "radius_m": 3.0, "cooldown_s": 120.0})
+    engine = RuleEngine(RulesConfig(rules=[wide, tight]))
+    fired: list[tuple[float, str]] = []
+    # person approaches: 4 m for 3 s (only the wide rule), then 1 m for 3 s
+    for ts, x in [(0.0, 4.0), (1.0, 4.0), (2.0, 4.0), (3.0, 1.0), (4.0, 1.0), (5.0, 1.0)]:
+        person = _track(1, "person", ground_point_m=(x, 0.0))
+        vehicle = _track(2, "forklift", ground_point_m=(0.0, 0.0))
+        for e in engine.process(_frame("cam1", ts, int(ts), [person, vehicle])):
+            fired.append((ts, e.rule_id))
+    assert fired == [(2.0, "wide"), (5.0, "tight")]
+
+
+def test_rule_severity_overrides_kind_default() -> None:
+    default_rule = SPEED_RULE
+    medium_rule = SPEED_RULE.model_copy(update={"id": "test_speed_medium", "severity": "low"})
+    engine = RuleEngine(RulesConfig(rules=[default_rule, medium_rule]))
+    events = engine.process(
+        _frame("cam1", 0.0, 0, [_track(1, "forklift", ["zoneA"], speed_mps=3.0)])
+    )
+    by_rule = {e.rule_id: e.severity_hint for e in events}
+    assert by_rule == {"test_speed": "medium", "test_speed_medium": "low"}
+
+
 def test_speed_does_not_fire_outside_zone() -> None:
     engine = RuleEngine(RulesConfig(rules=[SPEED_RULE]))
     events = engine.process(_frame("cam1", 0.0, 0, [_track(1, "forklift", [], speed_mps=3.0)]))
@@ -264,6 +296,6 @@ def test_cooldown_key_matches_docs_convention() -> None:
     engine.process(_frame("dock_north_01", 0.0, 0, [person, vehicle]))
     engine.process(_frame("dock_north_01", 1.0, 1, [person, vehicle]))
     events = engine.process(_frame("dock_north_01", 2.0, 2, [person, vehicle]))
-    assert events[0].cooldown_key == "dock_north_01:proximity:7+42"
+    assert events[0].cooldown_key == "dock_north_01:test_proximity:7+42"
     assert events[0].event_id.startswith("evt_")
     assert events[0].track_window_ref == f"incidents/{events[0].event_id}/tracks.jsonl"

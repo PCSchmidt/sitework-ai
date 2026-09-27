@@ -1,0 +1,127 @@
+{
+ "_comment": "Level-camera calibration for dock_north_01 (pipelines.geometry.level_camera). depth_lines: segments along the aisle direction (floor joint, right-wall top edge, left window sills) found by OpenCV's line segment detector on dock_north_01.ref.jpg (t=7.0 s of forklift_workers_interaction_1080p.mp4) and kept if they pass within 3 px of the RANSAC vanishing point. camera_height_m and focal_length_px are estimates, not measurements -- see assumptions.",
+ "depth_lines": [
+  [
+   [
+    1662.6,
+    279.1
+   ],
+   [
+    1918.7,
+    192.4
+   ]
+  ],
+  [
+   [
+    1668.4,
+    422.4
+   ],
+   [
+    1760.9,
+    410.5
+   ]
+  ],
+  [
+   [
+    1667.1,
+    673.5
+   ],
+   [
+    1704.3,
+    682.2
+   ]
+  ],
+  [
+   [
+    1918.9,
+    210.6
+   ],
+   [
+    1665.9,
+    291.6
+   ]
+  ],
+  [
+   [
+    730.6,
+    582.9
+   ],
+   [
+    760.3,
+    574.4
+   ]
+  ],
+  [
+   [
+    102.0,
+    338.8
+   ],
+   [
+    58.0,
+    330.0
+   ]
+  ],
+  [
+   [
+    1342.4,
+    571.1
+   ],
+   [
+    1310.5,
+    566.2
+   ]
+  ],
+  [
+   [
+    1026.7,
+    668.2
+   ],
+   [
+    1037.8,
+    703.2
+   ]
+  ],
+  [
+   [
+    192.5,
+    284.8
+   ],
+   [
+    128.0,
+    266.0
+   ]
+  ],
+  [
+   [
+    38.2,
+    812.1
+   ],
+   [
+    0.5,
+    824.1
+   ]
+  ],
+  [
+   [
+    0.4,
+    821.0
+   ],
+   [
+    36.9,
+    809.4
+   ]
+  ]
+ ],
+ "principal_point": [
+  960.0,
+  540.0
+ ],
+ "camera_height_m": 1.4,
+ "focal_length_px": 3500.0,
+ "assumptions": {
+  "camera_height_m": "1.40 m: mean of two independent estimates on the reference frame. (a) Forklift rear-wheel track 0.98 m (HELI 3.5 t class spec) spans 225 px at contact row y=821, 307 px below the horizon -> h = 0.98*307/225 = 1.34 m. (b) Worker standing at feet row y=775, head y=470, assumed 1.70-1.75 m tall -> h = 1.46-1.50 m. Uncertainty about +/-8%, which scales every distance.",
+  "focal_length_px": "3500 px (~31 deg horizontal FOV): from the forklift's ~1.7 m wheelbase between rear (y=821) and front (y=792) wheel contact rows. The front contact row is only +/-5 px certain, so the plausible range is ~3000-4400 px. Focal length only scales distances along the aisle (depth); cross-aisle distances don't depend on it.",
+  "roll": "Assumed zero (ceiling beams and window sills run horizontal in the frame)."
+ },
+ "reference_image": "dock_north_01.ref.jpg"
+}

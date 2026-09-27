@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchIncidents, liveWsUrl } from '../api'
+import { STATIC_DEMO } from '../config'
 import type { IncidentRecord, WsMessage } from '../types'
 
 /**
@@ -8,7 +9,8 @@ import type { IncidentRecord, WsMessage } from '../types'
  * with backoff on drop rather than leaving the feed silently stale --
  * the WS server itself has no replay, so a dropped connection needs a
  * REST re-fetch, not just a raw reconnect, to catch up on anything missed
- * while disconnected.
+ * while disconnected. In the static demo build there is no server: one fetch of the
+ * recorded incidents, no socket.
  */
 export function useLiveIncidents() {
   const [incidents, setIncidents] = useState<IncidentRecord[]>([])
@@ -29,6 +31,7 @@ export function useLiveIncidents() {
 
   useEffect(() => {
     reload()
+    if (STATIC_DEMO) return
 
     let ws: WebSocket | null = null
     let closedByUs = false

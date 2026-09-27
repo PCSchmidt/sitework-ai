@@ -30,6 +30,7 @@ from string import Template
 
 import redis
 from pipelines.broker.streams import TRIGGER_STREAM_KEY, ConsumerGroupReader
+from pipelines.config.loader import RulesConfig, load_rules
 from pipelines.schemas import (
     AgentRunStats,
     IncidentRecord,
@@ -103,11 +104,14 @@ class AgentWorker:
         consumer_name: str,
         prompt_timeout_s: float | None = None,
         persister: Persister | None = None,
+        rules: RulesConfig | None = None,
     ) -> None:
         self.reader = ConsumerGroupReader(
             redis_client, TRIGGER_STREAM_KEY, GROUP_NAME, consumer_name
         )
         self.workspace_root = workspace_root
+        # rule thresholds for the Band-3 zone-dwell check (config/rules.yaml)
+        self.rules = rules if rules is not None else load_rules()
         self.evidence_root = evidence_root
         self.prompt_timeout_s = prompt_timeout_s
         self.persister: Persister = persister if persister is not None else NullPersister()
@@ -192,7 +196,7 @@ class AgentWorker:
                 event, f"result.json failed schema validation: {exc}", agent_run=agent_run
             )
 
-        gate = band3_check(event, verdict, tracks_dst)
+        gate = band3_check(event, verdict, tracks_dst, self.rules)
         if not gate.passed:
             return self._needs_review(
                 event,

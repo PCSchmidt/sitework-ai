@@ -45,5 +45,6 @@ def test_point_can_be_in_multiple_overlapping_zones() -> None:
 def test_real_zones_config_loads_and_compiles() -> None:
     zones_config = load_zones()
     engine = ZoneEngine(zones_config)
-    # dock_north polygon_m spans x in [0, 20], y in [0, 12] on dock_north_01
-    assert "dock_north" in engine.zone_ids_containing("dock_north_01", (10.0, 6.0))
+    # dock_north polygon_m spans x in [-7, 7], y in [8, 30] on dock_north_01
+    assert "dock_north" in engine.zone_ids_containing("dock_north_01", (-3.0, 18.0))
+    assert "cross_aisle_west" in engine.zone_ids_containing("warehouse_aisle_01", (0.0, 4.0))

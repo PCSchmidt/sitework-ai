@@ -1,13 +1,13 @@
 # 01 — Vision & Scope
 
 > **Vision vs. what was built (reviewed 2026-09-26).** This doc records the original vision, and
-> it's kept as written. The delivered system (M0–M6, all closed) covers the core of it: detection
+> it's kept as written. The delivered system (M0–M7, all closed) covers the core of it: detection
 > and tracking of people and vehicles, metric ground-plane geometry, deterministic proximity,
 > zone-dwell, and speed rules, the agent verification loop with its Band-3 gate, and a live
-> incident dashboard. Four pieces of the vision below were **not** built: PPE (helmet/vest)
-> detection, so the "unhelmeted worker" scenario in §3 can't run; the dashboard's live video
-> overlay and 2D site map; agent-written end-of-shift reports (a deterministic HTML report stands
-> in); and any hosted demo. The full list of disclosed gaps is in docs/02 §1 and docs/12-roadmap.md.
+> incident dashboard. Three pieces of the vision below were **not** built: PPE (helmet/vest)
+> detection, so the "unhelmeted worker" scenario in §3 can't run; a *live* video overlay and 2D
+> site map (M7 added both, drawn from recorded pipeline output, and hosted them as a static
+> demo); and agent-written end-of-shift reports (a deterministic HTML report stands in). The full list of disclosed gaps is in docs/02 §1 and docs/12-roadmap.md.
 
 ## 1. Problem Statement
 

@@ -1,0 +1,38 @@
+{
+  "camera_id": "dock_north_01",
+  "created_at": "2026-09-27T11:55:16.210108+00:00",
+  "method": "level_camera",
+  "homography_px_to_m": [
+    [
+      -0.0027328901705950303,
+      -9.368177489917207e-08,
+      2.6650390184154196
+    ],
+    [
+      -1.1832904129422447e-05,
+      2.1636446892969107e-05,
+      -9.565139916027235
+    ],
+    [
+      -1.3227826938143455e-23,
+      -0.0019520215264088646,
+      1.0
+    ]
+  ],
+  "depth_vanishing_point_px": [
+    975.15,
+    512.29
+  ],
+  "depth_lines_used": 11,
+  "focal_length_px_assumed": 3500.0,
+  "camera_height_m_assumed": 1.4,
+  "assumptions": {
+    "camera_height_m": "1.40 m: mean of two independent estimates on the reference frame. (a) Forklift rear-wheel track 0.98 m (HELI 3.5 t class spec) spans 225 px at contact row y=821, 307 px below the horizon -> h = 0.98*307/225 = 1.34 m. (b) Worker standing at feet row y=775, head y=470, assumed 1.70-1.75 m tall -> h = 1.46-1.50 m. Uncertainty about +/-8%, which scales every distance.",
+    "focal_length_px": "3500 px (~31 deg horizontal FOV): from the forklift's ~1.7 m wheelbase between rear (y=821) and front (y=792) wheel contact rows. The front contact row is only +/-5 px certain, so the plausible range is ~3000-4400 px. Focal length only scales distances along the aisle (depth); cross-aisle distances don't depend on it.",
+    "roll": "Assumed zero (ceiling beams and window sills run horizontal in the frame)."
+  },
+  "rms_px": 1.2113,
+  "valid": true,
+  "rms_gate_px": 2.0,
+  "reference_image": "dock_north_01.ref.jpg"
+}

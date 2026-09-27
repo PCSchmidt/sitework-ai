@@ -1,18 +1,20 @@
 # SiteWatch AI — computer vision safety monitoring, verified by a Recursive Language Model
 
-**Status: complete (milestones M0–M6), local-only portfolio project.** There is no hosted demo
-URL. Everything runs on your own machine with Docker, and a fresh clone can have the dashboard
-running with one command (see [Quickstart](#quickstart)). Build history and every known gap:
+**Status: complete (milestones M0–M7), portfolio project.**
+**▶ Live demo: [pcschmidt.github.io/sitework-ai](https://pcschmidt.github.io/sitework-ai/)**,
+the real dashboard playing recorded pipeline output in your browser. The full system runs on your
+own machine with Docker (see [Quickstart](#quickstart)). Build history and every known gap:
 [docs/12-roadmap.md](docs/12-roadmap.md).
 
-![SiteWatch AI dashboard in replay mode: the live incident feed filling in, a needs_review
-incident showing why the verification gate rejected it, and a confirmed violation with its
-narrative and recommended actions](docs/assets/demo.gif)
+![The SiteWatch dashboard: a forklift camera with live bounding boxes, a worker-to-forklift
+distance line and a 5 m exclusion rule firing; then a pedestrian in a forklift-only aisle, the
+zone rule firing, and the agent's verified verdict next to the deterministic gate's
+recheck](docs/assets/showcase.gif)
 
-*The dashboard running `make replay-up`: no GPU, no AI call. Thirty hand-labeled example
-incidents are replayed into the real database, API, and live-update path (sped up to one every
-3 s for this recording). Replayed narratives are tagged `[REPLAY DEMO]`, and replay mode has no
-video, so "No clip captured" is the expected evidence state.*
+*The live demo page. Boxes, track IDs, zones, distances and rule firings are drawn frame by frame
+from what the real pipeline recorded on each clip. The verdicts underneath come from real Prime
+Agent runs that passed the Band-3 gate. Nothing on the page is simulated, but it is recorded:
+a static page can't run a GPU or an LLM, so the live system stays a `make up` away.*
 
 ## What is this? (plain-language overview)
 
@@ -104,7 +106,8 @@ Letting an AI compute the answer is better than letting it guess, but it still i
 before anything is recorded, `agent/band3.py`, which is plain deterministic code, recomputes the
 key numbers itself from the same tracking data. It checks both the fast plane's claim and the
 agent's answer against its own recomputation (within 0.15 m for distance, 0.2 m/s for speed, or
-5%).
+5%). For zone-intrusion incidents it recomputes how long the person was continuously in the
+zone and checks that the agent's verdict agrees with it.
 
 - **Everything agrees** → the incident is stored as `confirmed`.
 - **Anything disagrees**, or the agent times out, crashes, or writes malformed output → the
@@ -159,16 +162,17 @@ flowchart TD
 
 | | |
 | --- | --- |
+| Live demo | [pcschmidt.github.io/sitework-ai](https://pcschmidt.github.io/sitework-ai/): the dashboard as a static GitHub Pages build, playing recorded pipeline output (3 cameras, 2 real agent-verified incidents) |
 | Runs on | Your machine via Docker Compose. `make replay-up` needs only Docker; the full video pipeline also needs an NVIDIA GPU |
-| Fast plane | YOLO11s (Ultralytics) + ByteTrack + Kalman filter; homography and vanishing-point calibration; Shapely zones; rule engine for proximity, zone dwell, and speed |
+| Fast plane | YOLO11s (Ultralytics) + ByteTrack; three calibration methods (measured points, vanishing points, level camera) plus camera-motion compensation; Shapely zones; rule engine for proximity, zone dwell, and speed |
 | Slow plane | [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent) v0.9.3 (RLM), headless over JSON-lines RPC, one fresh process per incident, 210 s external timeout |
 | Verification | Band-3 recomputation gate; Pydantic v2 schemas on everything crossing the planes |
-| Delivery | Postgres, FastAPI (REST + WebSocket), React dashboard: live incident feed, `needs_review` queue with a review form, KPI bar, evidence viewer, shift report |
+| Delivery | Postgres, FastAPI (REST + WebSocket), React dashboard: live incident feed, `needs_review` queue with a review form, KPI bar, camera player with a per-frame detection overlay and floor plan, shift report |
 | Detection speed | YOLO11s 35 FPS single-stream at 1080p on an RTX A4500 laptop GPU; 3 streams reach 30.2 FPS each with TensorRT FP16 on a rested GPU, 9.5–13.2 under sustained heat ([benchmarks](docs/benchmarks.md)) |
 | Agent accuracy | 30 hand-labeled incidents against the real Prime Agent: 86.7% first-pass (all misses were timeouts; 100% after recalibrating the timeout), 82.1% classification agreement ([eval](docs/eval-m5-agent-slow-path.md)) |
 | Agent cost | ~43–56 K tokens and ~$0.002 per incident on a GLM-Flash-class model |
 | Cloud | Validated Terraform for AWS, GCP, and Azure (`fmt`/`validate` in CI), deliberately never applied ([ADR-004](docs/adr/ADR-004-documentation-only-cloud-deployment.md)) |
-| Tests | 157: 130 run offline, 27 run against a real Postgres (in CI) |
+| Tests | 182 Python (155 offline, 27 against a real Postgres in CI) + 6 dashboard unit tests |
 
 ## Architecture at a glance
 
@@ -224,8 +228,8 @@ Where things live:
 
 | Path | What it is |
 | --- | --- |
-| `pipelines/vision/` | `pipeline.py` (the per-camera frame loop), `detector.py`, `rules.py` (the rule engine), `evidence.py` (captures the tracking window around each trigger) |
-| `pipelines/geometry/` | `homography.py` (pixels → meters from measured points), `vanishing_point.py` (calibration from parallel lines, when no measured points exist), `calibrate.py` (CLI for both), `zones.py` |
+| `pipelines/vision/` | `pipeline.py` (the per-camera frame loop), `detector.py`, `rules.py` (the rule engine), `evidence.py` (captures the tracking window around each trigger), `record.py` (runs the same loop offline over a clip and saves every frame's output for the dashboard's camera player) |
+| `pipelines/geometry/` | `homography.py` (pixels → meters from measured points), `vanishing_point.py` (calibration from parallel lines), `level_camera.py` (calibration for a camera looking straight down an aisle), `motion.py` (camera-motion compensation for panning cameras), `calibrate.py` (CLI for all three), `zones.py` |
 | `pipelines/broker/` | Redis Streams retention, consumer groups, replay tooling |
 | `pipelines/schemas/` | Pydantic v2 models for everything crossing the planes: `TrackletFrame`, `TriggerEvent`, `KinematicsVerdict`, `IncidentRecord` |
 | `agent/worker.py` | Pops each `TriggerEvent`, prepares the incident files, drives the agent, applies the gate, persists the result |
@@ -233,16 +237,25 @@ Where things live:
 | `agent/band3.py` | The recomputation gate |
 | `agent/prompts/` | The per-incident prompts the agent receives |
 | `api/` | FastAPI app, Postgres schema and queries, evidence endpoints, shift-report renderer |
-| `ui/` | React + Vite dashboard |
+| `ui/` | React + Vite dashboard; `ui/public/showcase/` holds the recorded clips and pipeline output the live demo plays |
 | `config/` | `cameras.yaml`, `zones.yaml`, `rules.yaml`, `calibration/`: the whole deterministic rule setup |
 | `evaluation/` | The 30-incident agent eval (fixtures + runner), the detection benchmark, MOTA/IDF1 tracking eval |
-| `scripts/` | `replay_demo.py`, `smoke_test.py`, `record_golden_session.py`, `check_docs.py` |
+| `scripts/` | `replay_demo.py`, `showcase_agent.py` (real agent runs for the live demo's incidents), `smoke_test.py`, `record_golden_session.py`, `check_docs.py` |
 | `docker/` | Dockerfiles, `docker-compose.yml` (full stack), `docker-compose.replay.yml` ($0 demo) |
 | `deploy/terraform/` | AWS / GCP / Azure reference environments, validated, never applied |
 | `data/manifests/` | Where every clip, dataset, and weight file came from, its license, and its hash |
 | `docs/` | The design suite: architecture, schemas, security, cost, risks, ADRs, spikes, evals, runbooks |
 
 ## Quickstart
+
+### 0. Just look (nothing to install)
+
+Open the **[live demo](https://pcschmidt.github.io/sitework-ai/)**. The **Incidents** tab plays
+each incident's clip cued a few seconds before its rule fires, then shows the fast plane's
+measurement, the agent's verdict, and the gate's recheck side by side. The **Cameras** tab plays
+every camera with the detection overlay. Hover a box for its floor position and speed, toggle
+the layers, and watch the top-down floor plan. The page is a static build of the same React
+dashboard; `make showcase` then `make showcase-agent` regenerate everything it plays.
 
 ### 1. See it running (Docker only, about 5 minutes the first time)
 
@@ -263,7 +276,7 @@ path was tested from a fresh clone on 2026-09-26.
 
 ```bash
 uv sync                # note: pulls CUDA-enabled PyTorch, a multi-GB download
-uv run pytest          # 130 tests offline; 27 more run when TEST_DATABASE_URL points at Postgres
+uv run pytest          # 155 tests offline; 27 more run when TEST_DATABASE_URL points at Postgres
 ```
 
 ### 3. Run the full pipeline on video (NVIDIA GPU required)
@@ -282,10 +295,10 @@ setup a fresh clone doesn't have, because clips, weights, and the agent package 
    It isn't on the public npm registry.
 5. `make up`, then open <http://localhost:5173>.
 
-**Important:** until the three demo cameras are calibrated (see
-[Limitations](#limitations)), this stack will detect and track people and vehicles in the clips
-but won't fire safety rules on them. The incident pipeline itself has been exercised through the
-eval fixtures, the smoke test (`scripts/smoke_test.py`), and replay mode.
+Two of the three demo cameras are calibrated (`config/calibration/`), so rules fire on their
+clips: the 5 m exclusion rule on `dock_north_01` and the forklift-aisle zone rule on
+`warehouse_aisle_01`. `yard_excavator_01` runs detection and tracking only (see
+[Limitations](#limitations)).
 
 Other entry points: `make calib` (camera calibration CLI), `make agent-eval` (the 30-incident
 eval against the real agent), `make eval` (detection benchmark), `make tracking-eval` (MOTA/IDF1).
@@ -369,25 +382,45 @@ All reproducible from this repo; see [Verify the claims](#verify-the-claims-a-re
 - **Tracking accuracy:** MOTA 0.16–0.46 on MOT17 pedestrian sequences. That's low, and expected
   for an off-the-shelf detector on crowded street scenes it wasn't tuned for; it's reported as a
   baseline, not a claim of tracking quality on site footage.
-- **Calibration:** both methods validated on real phone footage, catching two bugs (a sign
+- **The live demo's incidents (M7):** the full chain ran on real clips. Detection, tracking,
+  calibration and rules ran on every frame, then real Prime Agent sessions and the gate ran on
+  each trigger. The dock warning fired at 4.20 m (5 m rule); the agent recomputed 4.20 m and
+  classified it normal operations. The aisle intrusion fired after 3.0 s in the zone; the agent
+  confirmed a violation. On its **first** run, though, the agent called that intrusion a false
+  positive despite about 8 s of in-zone evidence, and the gate had no zone check to catch it.
+  That gap is now closed (see [the gate](#the-referee-the-band-3-gate)). Building the demo also
+  surfaced three real fast-plane bugs, all fixed with tests: cooldowns shared across rules of the
+  same kind (so a warning could mute a tighter rule), speed limits applied to pedestrians, and
+  jittery 0.1 s speed estimates ([docs/12 M7](docs/12-roadmap.md)).
+- **Calibration:** the first two methods validated on real phone footage, catching two bugs (a sign
   ambiguity in the vanishing-point math, and a rotation tolerance too strict for real-world line
   picks). A later cross-platform CI failure exposed that the sign fix was itself incomplete, and
   the corrected version resolves it with a real margin rather than a floating-point coin flip.
 - **Cloud:** all three Terraform environments validate. Running `terraform validate` for real
   caught three bugs in the source specs (a dangling reference, a name Azure rejects, a wrong
   argument name), fixed in both the code and the runbooks.
-- **Quality gates:** 157 tests, ruff and mypy clean, UI type-check and build clean, all green in
-  CI.
+- **Quality gates:** 182 Python tests (155 offline + 27 Postgres) and 6 dashboard tests; ruff,
+  mypy, UI type-check and build clean, all green in CI.
 
 ## Limitations
 
 - **Simulated inputs only.** The cameras are looped stock clips, and the agent eval set is 30
   hand-built tracking scenarios, not real incidents.
-- **The demo cameras aren't calibrated, so on video the rules don't fire.** Calibration needs a
-  few known real-world measurements per camera, which stock footage doesn't provide (both
-  methods were attempted on the demo clips and documented as inconclusive). Only the author's own
-  test clip is calibrated. The end-to-end path from a demo camera to a dashboard incident has
-  therefore never run; each half has been verified separately.
+- **The demo calibrations are estimates, not surveys.** Stock footage has no measured points.
+  `dock_north_01`'s scale comes from a forklift's published wheel track and a person's typical
+  height (about ±8% on every distance), plus an assumed focal length that affects distances along
+  the aisle. `warehouse_aisle_01` has nothing measurable, so its calibration deliberately fails
+  the quality gate and it runs zone rules only. Every assumption is written into the calibration
+  files and shown on the dashboard.
+- **The demo's 5 m rule is a choice.** On the dock clip the worker never comes within the 3 m
+  forklift rule (closest approach 4.2 m), so the demo site adds a conservative 5 m warning tier.
+  The agent then correctly verifies that the event was normal operations. No clip contains a
+  genuine close call.
+- **The detector has blind spots.** It is COCO-trained, so it has no forklift class (trucks stand
+  in as "heavy vehicle") and no excavator class: on the yard clip only the cab operator is boxed.
+- **The agent is nondeterministic.** The same aisle incident got `false_positive` once and
+  `violation` twice. The gate now catches that particular contradiction for zone rules, but a
+  plausible wrong judgment inside the allowed classes (e.g. normal ops vs near miss) still passes.
 - **No alarm output.** Rules fire in milliseconds, but nothing sounds an alarm off them. A person
   sees an incident on the dashboard only after the ~1-minute agent verification. A consumer on
   the `trigger_events` stream is the missing piece ([docs/02 §3](docs/02-system-architecture.md)).
@@ -397,14 +430,14 @@ All reproducible from this repo; see [Verify the claims](#verify-the-claims-a-re
 - **Not reproducible everywhere yet.** `prime-agent` isn't on npm, so the agent container builds
   only from a vendored package; CI checks the agent integration by replaying a recorded session
   instead. The full stack also needs the clips and weights downloaded by hand.
-- **No live video view.** The dashboard has no video-with-boxes overlay or 2D site map (they
-  need a live track feed, `frame.ticker`, that wasn't built). PPE (hard hat / vest) detection
-  was never built either.
+- **The video overlay is recorded, not live.** The camera player draws recorded pipeline output;
+  the running stack doesn't stream tracks to the browser (`frame.ticker` wasn't built). PPE
+  (hard hat / vest) detection was never built either.
 - **Local-demo security only.** The API has no authentication, and the compose files expose the
   API and dashboard ports on all network interfaces. Fine on a private machine; not fine on a
   shared network ([docs/08](docs/08-security.md)).
-- **The dashboard has no automated tests** (`npm test` passes with zero tests), and there's no
-  prompt-injection test suite.
+- **Thin dashboard tests.** Six unit tests cover the overlay's frame lookup and geometry; there
+  are no component or end-to-end tests in CI, and there's no prompt-injection test suite.
 - **One development GPU.** All performance numbers come from a single laptop-class GPU.
 
 ## Operational notes
@@ -440,12 +473,13 @@ validated, never applied.
 ### Verify the claims (a reviewer's path)
 
 ```bash
-uv run pytest -q                          # 130 offline; 157 with TEST_DATABASE_URL set
+uv run pytest -q                          # 155 offline; 182 with TEST_DATABASE_URL set
 uv run ruff check . && uv run mypy        # lint + types
 uv run python scripts/check_docs.py       # cross-document consistency checks
 make replay-up                            # the dashboard at http://localhost:5173
 curl -s http://localhost:8000/api/v1/kpis # live counts from Postgres
-(cd ui && npm ci && npm run build)        # dashboard type-check + build
+(cd ui && npm ci && npm test && npm run build)  # dashboard tests, type-check + build
+make showcase && make showcase-agent      # re-record the live demo (GPU + prime-agent)
 make iac                                  # terraform fmt + validate, all three clouds (needs terraform)
 make agent-eval                           # the 30-incident eval (needs prime-agent installed)
 make tracking-eval                        # MOTA/IDF1 (needs the MOT17 download)

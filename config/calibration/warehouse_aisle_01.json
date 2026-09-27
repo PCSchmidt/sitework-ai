@@ -1,0 +1,36 @@
+{
+  "camera_id": "warehouse_aisle_01",
+  "created_at": "2026-09-27T12:01:26.452697+00:00",
+  "method": "level_camera",
+  "homography_px_to_m": [
+    [
+      -0.0014814814814814816,
+      0.0,
+      1.4222222222222223
+    ],
+    [
+      0.0,
+      0.0,
+      -2.2962962962962963
+    ],
+    [
+      0.0,
+      -0.001851851851851852,
+      1.0
+    ]
+  ],
+  "depth_vanishing_point_px_assumed": [
+    960.0,
+    540.0
+  ],
+  "focal_length_px_assumed": 1550.0,
+  "camera_height_m_assumed": 0.8,
+  "assumptions": {
+    "camera_height_m": "0.80 m, from two estimates at t=8 s. (a) Pallet front faces at row y=728 (188 px below the horizon) span ~270 px; for 1.2 m EUR pallets h = 1.2*188/270 = 0.84 m. (b) The worker (feet y=860, head y=135) at an assumed 1.75-1.80 m gives h = 0.77-0.79 m.",
+    "focal_length_px": "1550 px (~63 deg horizontal FOV), a typical 35 mm-equivalent lens. Nothing in the frame measures depth, so this is a plain assumption; it only affects distances along the camera axis.",
+    "depth_vanishing_point_px": "Assumed at the principal point: level camera (vertical rack uprights stay vertical), looking straight across the aisle."
+  },
+  "rms_px": 9999.0,
+  "valid": false,
+  "rms_gate_px": 2.0
+}

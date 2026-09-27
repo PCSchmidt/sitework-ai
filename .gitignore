@@ -55,3 +55,6 @@ docker/vendor/*.tgz
 *.tfplan
 crash.log
 crash.*.log
+
+# Showcase recorder evidence (scripts/showcase_agent.py input; regenerable)
+/build/

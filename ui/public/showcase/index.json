@@ -1,0 +1,32 @@
+[
+ {
+  "camera_id": "dock_north_01",
+  "name": "Dock North 01",
+  "note": "A forklift and a pedestrian share a warehouse floor. The camera is handheld and drifts up to 65 px, so every frame is motion-compensated back onto the frame the calibration was made on. Calibration: level-camera method (depth lines fit to 1.2 px); scale comes from the forklift's wheel track and the worker's height, so distances carry roughly +/-8% uncertainty.",
+  "duration_s": 12.16,
+  "events": 1,
+  "calibration": {
+   "method": "level_camera",
+   "valid": true
+  }
+ },
+ {
+  "camera_id": "warehouse_aisle_01",
+  "name": "Warehouse Aisle 01",
+  "note": "A pedestrian walks through a forklift-only cross-aisle. Tripod shot with no floor lines to measure, so the calibration is deliberately unverified: it fails the 2 px quality gate and the camera runs in zone-only mode. Zone rules fire; distance and speed rules stay off rather than trusting estimated meters.",
+  "duration_s": 24.72,
+  "events": 1,
+  "calibration": {
+   "method": "level_camera",
+   "valid": false
+  }
+ },
+ {
+  "camera_id": "yard_excavator_01",
+  "name": "Yard Excavator 01",
+  "note": "A backhoe digging, filmed from a panning camera. Detection and tracking only: uncalibrated, so no ground positions, zones, or rules. Known limitation on display: the COCO-trained detector has no excavator class, so the machine itself is rarely boxed and only the operator in the cab is detected reliably.",
+  "duration_s": 18.96,
+  "events": 0,
+  "calibration": null
+ }
+]

@@ -2,7 +2,9 @@
 
 Consumes `TrackletFrame`s in order (per camera) and emits `TriggerEvent`s
 when a configured rule condition holds continuously for its threshold,
-with cooldown-based dedup on `(camera_id, rule_kind, sorted track_ids)`.
+with cooldown-based dedup on `(camera_id, rule_id, sorted track_ids)` -- per
+rule, not per rule kind, so a wide warning-tier rule firing first can't
+suppress a tighter rule of the same kind on the same tracks (docs/04 §4).
 Deterministic, auditable, zero LLM cost -- this is the hard safety-interlock
 layer (ADR-001); anything requiring judgment goes through the slow path via
 the emitted TriggerEvent, never here.
@@ -24,8 +26,8 @@ from pipelines.schemas import Severity, TrackletFrame, TriggerEvent, TriggerMetr
 PERSON_CLASS = "person"
 VEHICLE_CLASSES = {"vehicle", "heavy_vehicle", "forklift"}
 
-# Rules declare kind/thresholds, not severity (docs/06 §7); this is the
-# engine's default mapping until/unless rules.yaml grows a `severity` field.
+# Default severity per rule kind; a rule's optional `severity` in rules.yaml
+# overrides it (docs/06 §7).
 DEFAULT_SEVERITY: dict[RuleKind, Severity] = {
     RuleKind.ZONE_INTRUSION: Severity.HIGH,
     RuleKind.PROXIMITY: Severity.HIGH,
@@ -81,7 +83,7 @@ class RuleEngine:
 
     def _cooldown_key(self, camera_id: str, rule: Rule, track_ids: list[int]) -> str:
         ids = "+".join(str(t) for t in sorted(track_ids))
-        return f"{camera_id}:{rule.kind}:{ids}"
+        return f"{camera_id}:{rule.id}:{ids}"
 
     def _ready(self, cooldown_key: str, now: float, cooldown_s: float) -> bool:
         last = self._cooldowns.get(cooldown_key)
@@ -100,7 +102,7 @@ class RuleEngine:
             trigger_ts=frame.frame_ts,
             camera_id=frame.camera_id,
             rule_id=rule.id,
-            severity_hint=DEFAULT_SEVERITY[rule.kind],
+            severity_hint=rule.severity or DEFAULT_SEVERITY[rule.kind],
             metrics=metrics,
             involved_track_ids=track_ids,
             # Paths pipelines.vision.evidence.EvidenceCapture writes to, once the
@@ -245,7 +247,7 @@ class RuleEngine:
             del self._proximity[k]
         return events
 
-    # -- speed: instantaneous ground speed > limit_mps inside a zone --------
+    # -- speed: vehicle ground speed > limit_mps inside a zone ---------------
 
     def _eval_speed(self, frame: TrackletFrame, rule: Rule) -> list[TriggerEvent]:
         assert rule.limit_mps is not None
@@ -257,6 +259,9 @@ class RuleEngine:
         if not frame.calibration_quality.valid:
             return events
         for track in frame.tracks:
+            # Speed limits are vehicle rules; a walking person's speed is not in scope.
+            if track.cls not in VEHICLE_CLASSES:
+                continue
             if track.speed_mps is None or not _in_rule_zone(track.zone_ids, rule):
                 continue
             if track.speed_mps > rule.limit_mps:

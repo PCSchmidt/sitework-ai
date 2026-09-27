@@ -1,6 +1,6 @@
 """Manual homography calibration tool (docs/04 §3).
 
-Two methods, both writing the same `config/calibration/{camera_id}.json`
+Three methods, all writing the same `config/calibration/{camera_id}.json`
 shape (matrix, a quality metric, and the hard gate
 `valid = rms_px <= RMS_GATE_PX`, docs/06 §3):
 
@@ -16,6 +16,15 @@ shape (matrix, a quality metric, and the hard gate
   radians), not a literal point-reprojection error -- comparable to the
   points method's gate, but not the same kind of measurement.
 
+- **level_camera**: for one-point-perspective views (a camera looking down an
+  aisle), where the vanishing_point method's second ground vanishing point is
+  at infinity (`pipelines.geometry.level_camera`). Fits the depth vanishing
+  point from traced aisle lines (measured; its line-fit residual is the
+  `rms_px`) and takes camera height and focal length as stated assumptions,
+  which the output records with their sources. Optionally names a
+  `reference_image` the calibration was made on, for motion compensation
+  (`pipelines.geometry.motion`).
+
 Correspondences/lines are supplied as JSON files rather than collected
 interactively (clicking/tracing is just one way to produce the same file):
 
@@ -30,6 +39,17 @@ interactively (clicking/tracing is just one way to produce the same file):
       "principal_point": [cx, cy],
       "ground_reference_px": [x, y],
       "ground_reference_expected_xy": [x_m, y_m]
+    }
+
+    # --setup file (level_camera)
+    {
+      "depth_lines": [[[x1, y1], [x2, y2]], ...],   # or, with no usable lines:
+      "depth_vanishing_point_px": [x, y],           # assumed -> fails the gate
+      "principal_point": [cx, cy],
+      "focal_length_px": f,
+      "camera_height_m": h,
+      "assumptions": {"camera_height_m": "how h was estimated", ...},
+      "reference_image": "camera_id.ref.jpg"   # optional
     }
 
 `ground_reference_expected_xy` is the operator's own *rough* real-world estimate of
@@ -48,6 +68,10 @@ Usage:
         --method vanishing_point --camera-id dining_room_01 \
         --lines config/calibration/dining_room_01.lines.json \
         --camera-height 1.2 --out-dir config/calibration
+
+    uv run python -m pipelines.geometry.calibrate \
+        --method level_camera --camera-id dock_north_01 \
+        --setup config/calibration/dock_north_01.setup.json --out-dir config/calibration
 """
 
 from __future__ import annotations
@@ -57,8 +81,10 @@ import json
 import math
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from pipelines.geometry.homography import Homography, Point
+from pipelines.geometry.level_camera import calibrate_level_camera, level_camera_homography
 from pipelines.geometry.vanishing_point import (
     Line,
     calibrate_from_vanishing_points,
@@ -172,15 +198,81 @@ def calibrate_from_lines(
     }
 
 
+# rms_px recorded when the depth vanishing point is assumed rather than fitted:
+# there is no measurement, so the calibration deliberately fails the gate and
+# rules degrade to zone-only (same sentinel pipeline.py uses for "no calibration").
+UNMEASURED_RMS_PX = 9999.0
+
+
+def load_setup(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    required = {"principal_point", "focal_length_px", "camera_height_m"}
+    missing = required - data.keys()
+    if missing:
+        raise CalibrationError(f"{path} missing required key(s): {sorted(missing)}")
+    if ("depth_lines" in data) == ("depth_vanishing_point_px" in data):
+        raise CalibrationError(
+            f"{path} needs exactly one of depth_lines (fitted) "
+            "or depth_vanishing_point_px (assumed)"
+        )
+    return data  # type: ignore[no-any-return]
+
+
+def calibrate_from_setup(camera_id: str, setup: dict[str, Any]) -> dict[str, object]:
+    principal_point = (float(setup["principal_point"][0]), float(setup["principal_point"][1]))
+    focal_length_px = float(setup["focal_length_px"])
+    camera_height_m = float(setup["camera_height_m"])
+    record: dict[str, object] = {
+        "camera_id": camera_id,
+        "created_at": datetime.now(UTC).isoformat(),
+        "method": "level_camera",
+    }
+    if "depth_lines" in setup:
+        depth_lines = _parse_lines(setup["depth_lines"])
+        homography, vp, rms_px = calibrate_level_camera(
+            depth_lines, principal_point, focal_length_px, camera_height_m
+        )
+        record["homography_px_to_m"] = homography.to_dict()["matrix"]
+        record["depth_vanishing_point_px"] = [round(vp[0], 2), round(vp[1], 2)]
+        record["depth_lines_used"] = len(depth_lines)
+    else:
+        vp = (
+            float(setup["depth_vanishing_point_px"][0]),
+            float(setup["depth_vanishing_point_px"][1]),
+        )
+        homography = level_camera_homography(vp, principal_point, focal_length_px, camera_height_m)
+        rms_px = UNMEASURED_RMS_PX
+        record["homography_px_to_m"] = homography.to_dict()["matrix"]
+        record["depth_vanishing_point_px_assumed"] = [vp[0], vp[1]]
+    quality = CalibrationQuality.from_rms(rms_px)
+    record.update(
+        {
+            "focal_length_px_assumed": focal_length_px,
+            "camera_height_m_assumed": camera_height_m,
+            "assumptions": setup.get("assumptions", {}),
+            "rms_px": round(rms_px, 4),
+            "valid": quality.valid,
+            "rms_gate_px": RMS_GATE_PX,
+        }
+    )
+    if setup.get("reference_image"):
+        record["reference_image"] = setup["reference_image"]
+    return record
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--camera-id", required=True)
-    ap.add_argument("--method", choices=["points", "vanishing_point"], default="points")
+    ap.add_argument(
+        "--method", choices=["points", "vanishing_point", "level_camera"], default="points"
+    )
     ap.add_argument("--points", type=Path, help="JSON correspondences file (--method points)")
     ap.add_argument("--lines", type=Path, help="JSON lines file (--method vanishing_point)")
     ap.add_argument(
         "--camera-height", type=float, help="assumed camera height, meters (vanishing_point)"
     )
+    ap.add_argument("--setup", type=Path, help="JSON setup file (--method level_camera)")
     ap.add_argument("--out-dir", type=Path, default=Path("config/calibration"))
     args = ap.parse_args()
 
@@ -189,6 +281,10 @@ def main() -> None:
             ap.error("--method points requires --points")
         image_pts, world_pts = load_correspondences(args.points)
         record = calibrate(args.camera_id, image_pts, world_pts)
+    elif args.method == "level_camera":
+        if args.setup is None:
+            ap.error("--method level_camera requires --setup")
+        record = calibrate_from_setup(args.camera_id, load_setup(args.setup))
     else:
         if args.lines is None or args.camera_height is None:
             ap.error("--method vanishing_point requires --lines and --camera-height")

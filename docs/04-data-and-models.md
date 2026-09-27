@@ -72,8 +72,21 @@ has not been attempted.
   a frame, enter their metric coordinates from a site plan (or measured tape distances); solves DLT
   homography H (3×3, px→meters). Saves to `config/calibration/{camera_id}.json` with reprojection
   error (RMS px) which becomes the **calibration quality metric** forwarded in telemetry.
-- Ground point for a track: bottom-center of bbox projected through H. Velocity in m/s from Kalman
-  state in ground coordinates.
+- **Two more methods for scenes without measured points**, same output file and gate:
+  `vanishing_point` (two orthogonal ground directions plus vertical, from parallel structural
+  lines; `pipelines/geometry/vanishing_point.py`) and, added at M7, `level_camera` (a camera
+  looking straight down an aisle, where the second ground vanishing point is at infinity; the
+  depth vanishing point is fitted from traced lines and camera height + focal length are recorded
+  assumptions; `pipelines/geometry/level_camera.py`). As built: `dock_north_01` is `level_camera`
+  at 1.21 px (passes). `warehouse_aisle_01` is `level_camera` with an assumed vanishing point,
+  recorded as unmeasured, so it fails the gate and runs zone-only. `dining_room_01` is
+  `vanishing_point` (fails). `yard_excavator_01` is uncalibrated (docs/12 M7).
+- **Moving cameras:** a calibration can name the frame it was made on (`reference_image`). Each
+  frame is then registered to it with an ORB + RANSAC image homography and the two are composed
+  (`pipelines/geometry/motion.py`), so a panning camera's ground points don't drift.
+- Ground point for a track: bottom-center of bbox projected through H. Velocity in m/s is the
+  ground displacement over a ~1 s window of published points (at least 0.5 s of history); a
+  single 0.1 s difference turned box jitter into meters per second of fake speed at range (M7).
 - **Hard quality gate:** `calibration_quality.valid = (rms_px ≤ 2.0)`. Rules that require metric
   distance (proximity, speed, wrong_way) declare `min_calibration_quality` and degrade to
   zone-only semantics when calibration is invalid.

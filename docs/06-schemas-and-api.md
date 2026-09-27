@@ -48,7 +48,7 @@ Schemas are the hard contract at the fast/slow boundary (ADR-001). Single source
   "involved_track_ids": [42, 77],
   "track_window_ref": "incidents/evt_01J9ZK.../tracks.jsonl",
   "clip_ref": "incidents/evt_01J9ZK.../clip.mp4",
-  "cooldown_key": "dock_north_01:proximity:42+77",
+  "cooldown_key": "dock_north_01:proximity_forklift_pedestrian:42+77",
   "calibration_quality": {"rms_px": 1.4, "valid": true}
 }
 ```
@@ -71,10 +71,14 @@ reject on mismatch. **Tolerances:** |Δdistance| ≤ 0.15 m, |Δvelocity| ≤ 0.
 - **Fields cross-checked (as implemented in `agent/band3.py`):** for proximity triggers (exactly
   two involved tracks), the recomputed minimum distance is compared against both the fast path's
   `metrics.min_distance_m` and the agent's `verified_min_distance_m`, and the recomputed closing
-  velocity against the agent's `closing_velocity_mps`. Zone-intrusion and speed triggers have no
-  pairwise distance, so they pass the gate on schema validation alone. The original design also
-  listed `duration_s` and `ttc_s`; neither is cross-checked today (the 0.2 s time tolerance is
-  defined in `pipelines/schemas/models.py` but not applied by the gate).
+  velocity against the agent's `closing_velocity_mps`. For zone-intrusion triggers (one track;
+  added at M7) the gate recomputes the track's continuous in-zone dwell at the trigger frame from
+  the stored `zone_ids` and rejects a verdict that contradicts it: `violation` when the dwell
+  limit (from `config/rules.yaml`) isn't met, `false_positive` when it is, within the 0.2 s time
+  tolerance. `normal_ops`/`near_miss` pass as judgment calls, and the fast path's own
+  `duration_s` claim is deliberately not gated, so the agent can still correctly refute a wrong
+  trigger. Speed triggers still pass on schema validation alone, and `ttc_s` is not
+  cross-checked.
 - **Timestamp alignment:** nearest frame within 50 ms; the stored tracklet window is replayed at
   identical sample indices — no interpolation, no re-tracking.
 - **Rounding:** comparisons on float64; no early rounding in either implementation.
@@ -146,8 +150,15 @@ lifecycle). Nothing is expired automatically today.
 - `config/zones.yaml`: polygons (ground-plane meters), zone kind, `active`, and
   `min_calibration_quality`.
 - `config/rules.yaml`: rule ids, kind, human-readable descriptions, compliance citation strings,
-  zone bindings, and the rule parameters (`radius_m`, `duration_s`, `dwell_s`, `limit_mps`,
-  `cooldown_s`).
+  zone bindings, the rule parameters (`radius_m`, `duration_s`, `dwell_s`, `limit_mps`,
+  `cooldown_s`), and an optional `severity` that overrides the per-kind default (e.g. a 5 m
+  warning tier at `medium` next to a 3 m rule at the default `high`). Cooldowns are per rule id,
+  so tiers of the same kind don't mute each other.
+- `config/calibration/{camera_id}.json`: the pixel → ground homography, its method
+  (`points`, `vanishing_point`, `level_camera`), `rms_px` and the gate result, any stated
+  assumptions, and optionally the `reference_image` it was made on (enables per-frame motion
+  compensation). Written by `pipelines/geometry/calibrate.py` from a `*.points.json`,
+  `*.lines.json` or `*.setup.json` input kept alongside.
 - `config/shifts.yaml`: shift windows. Schema-validated by `tests/test_config.py`, but nothing
   consumes it yet: it was meant to drive the (unbuilt) Shift Synthesizer's shift boundaries, and
   the shift-report route takes an explicit `from_ts`/`to_ts` instead.

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { evidenceClipUrl, evidenceTracksUrl, submitReview } from '../api'
+import { STATIC_DEMO } from '../config'
 import type { IncidentRecord } from '../types'
+import { IncidentPlayback } from './IncidentPlayback'
 
 function Stat({ label, value }: { label: string; value: string | number | null }) {
   return (
@@ -35,6 +37,8 @@ export function IncidentDetail({ incident }: { incident: IncidentRecord }) {
         <h2 className="font-mono text-sm text-slate-400">{incident.event_id}</h2>
         <h1 className="text-xl font-semibold">{incident.camera_id}</h1>
       </div>
+
+      <IncidentPlayback incident={incident} />
 
       <div className="grid grid-cols-3 gap-3 bg-slate-900 border border-slate-800 rounded-lg p-4">
         <Stat label="Severity" value={incident.severity} />
@@ -71,7 +75,11 @@ export function IncidentDetail({ incident }: { incident: IncidentRecord }) {
 
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
         <div className="text-xs text-slate-500 mb-2">Evidence</div>
-        {!clipMissing ? (
+        {STATIC_DEMO ? (
+          <p className="text-sm text-slate-400">
+            The raw telemetry the agent and the Band-3 gate both worked from:
+          </p>
+        ) : !clipMissing ? (
           <video
             key={incident.event_id}
             controls
@@ -92,7 +100,7 @@ export function IncidentDetail({ incident }: { incident: IncidentRecord }) {
         </a>
       </div>
 
-      {incident.state === 'needs_review' && (
+      {incident.state === 'needs_review' && !STATIC_DEMO && (
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
           <div className="text-xs text-slate-500 mb-2">Record review decision</div>
           <div className="flex flex-col gap-2">

@@ -1,0 +1,18 @@
+{
+ "_comment": "Level-camera calibration for warehouse_aisle_01 (pipelines.geometry.level_camera) from worker_walking_aisle_1080p.mp4, a static tripod shot looking straight across a cross-aisle. No floor lines converge in this view, so the depth vanishing point is ASSUMED (level camera: rack uprights are vertical in the frame, so it sits at the principal point) rather than fitted. That makes the calibration unmeasured: it deliberately fails the RMS gate and the pipeline runs this camera in zone-only mode (zone_intrusion works, proximity/speed stay off), the degrade path docs/04 section 3 describes.",
+ "depth_vanishing_point_px": [
+  960.0,
+  540.0
+ ],
+ "principal_point": [
+  960.0,
+  540.0
+ ],
+ "camera_height_m": 0.8,
+ "focal_length_px": 1550.0,
+ "assumptions": {
+  "camera_height_m": "0.80 m, from two estimates at t=8 s. (a) Pallet front faces at row y=728 (188 px below the horizon) span ~270 px; for 1.2 m EUR pallets h = 1.2*188/270 = 0.84 m. (b) The worker (feet y=860, head y=135) at an assumed 1.75-1.80 m gives h = 0.77-0.79 m.",
+  "focal_length_px": "1550 px (~63 deg horizontal FOV), a typical 35 mm-equivalent lens. Nothing in the frame measures depth, so this is a plain assumption; it only affects distances along the camera axis.",
+  "depth_vanishing_point_px": "Assumed at the principal point: level camera (vertical rack uprights stay vertical), looking straight across the aisle."
+ }
+}

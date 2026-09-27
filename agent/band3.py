@@ -7,9 +7,16 @@ at the stored sample indices -- then rejects on mismatch against either what
 the fast path claimed (`TriggerEvent.metrics`) or what the agent claims
 (`KinematicsVerdict`).
 
-Only proximity-class triggers (exactly two `involved_track_ids`) have a
-pairwise distance to recompute; zone_intrusion/speed triggers pass through
-gate untouched (nothing here to cross-check against).
+Proximity triggers (exactly two `involved_track_ids`) get the pairwise
+distance/velocity check. Zone-intrusion triggers (one track) get a verdict
+consistency check: the track's continuous in-zone time at the trigger frame
+is recomputed from the same `zone_ids` the fast path stored, and the agent's
+classification must agree with it -- `violation` needs the dwell limit met,
+`false_positive` needs it not met (normal_ops/near_miss are judgment calls
+and pass). The fast path's own `duration_s` claim is deliberately *not*
+gated here: refuting a wrong fast-path claim is the agent's job, and a
+correct refutation must be able to reach `confirmed`. Speed triggers still
+pass on schema validation alone.
 """
 
 from __future__ import annotations
@@ -17,14 +24,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from pipelines.config.loader import RuleKind, RulesConfig
 from pipelines.schemas import (
     DISTANCE_TOL_M,
     RELATIVE_TOL,
     VELOCITY_TOL_MPS,
+    Classification,
     KinematicsVerdict,
     TrackletFrame,
     TriggerEvent,
 )
+
+# docs/06 §3's time tolerance (|Δtime| <= 0.2 s), applied to the zone dwell limit.
+TIME_TOL_S = 0.2
 
 
 @dataclass(frozen=True)
@@ -33,6 +45,7 @@ class Band3Result:
     reasons: list[str]
     recomputed_min_distance_m: float | None
     recomputed_closing_velocity_mps: float | None
+    recomputed_dwell_s: float | None = None
 
 
 def _within_tol(claimed: float, recomputed: float, abs_tol: float) -> bool:
@@ -89,7 +102,64 @@ def recompute_kinematics(
     return min_distance_m, closing_velocity_mps
 
 
-def check(event: TriggerEvent, verdict: KinematicsVerdict, tracks_path: Path) -> Band3Result:
+def recompute_zone_dwell(
+    frames: list[TrackletFrame], track_id: int, zone_ids: list[str], until_ts: float
+) -> float | None:
+    """Continuous time the track has been inside any of `zone_ids` as of the last
+    frame at or before `until_ts` (the trigger), mirroring RuleEngine's dwell
+    (`frame_ts - entered_ts`). None if the track isn't in the zone at that frame."""
+    entered: float | None = None
+    last_ts: float | None = None
+    for frame in sorted(frames, key=lambda f: f.frame_ts):
+        if frame.frame_ts > until_ts + 1e-6:
+            break
+        track = next((t for t in frame.tracks if t.track_id == track_id), None)
+        in_zone = track is not None and any(z in zone_ids for z in track.zone_ids)
+        if not in_zone:
+            entered = None
+        elif entered is None:
+            entered = frame.frame_ts
+        last_ts = frame.frame_ts
+    if entered is None or last_ts is None:
+        return None
+    return last_ts - entered
+
+
+def _check_zone_intrusion(
+    event: TriggerEvent, verdict: KinematicsVerdict, tracks_path: Path, rules: RulesConfig
+) -> Band3Result:
+    rule = next((r for r in rules.rules if r.id == event.rule_id), None)
+    if rule is None or rule.kind != RuleKind.ZONE_INTRUSION or rule.dwell_s is None:
+        return Band3Result(True, [], None, None)
+    frames = load_tracks(tracks_path)
+    dwell = recompute_zone_dwell(
+        frames, event.involved_track_ids[0], rule.zone_ids, event.trigger_ts
+    )
+    supported = dwell is not None and dwell >= rule.dwell_s - TIME_TOL_S
+    shown = "not in the zone at the trigger frame" if dwell is None else f"{dwell:.2f}s"
+    reasons: list[str] = []
+    if verdict.classification == Classification.VIOLATION and not supported:
+        reasons.append(
+            f"agent classified violation, but recompute shows track {event.involved_track_ids[0]} "
+            f"in {rule.zone_ids}: {shown} (dwell limit {rule.dwell_s}s, tol {TIME_TOL_S}s)"
+        )
+    if verdict.classification == Classification.FALSE_POSITIVE and supported:
+        reasons.append(
+            f"agent classified false_positive, but recompute shows track "
+            f"{event.involved_track_ids[0]} in {rule.zone_ids} for {shown} continuously at the "
+            f"trigger, meeting the {rule.dwell_s}s dwell limit (tol {TIME_TOL_S}s)"
+        )
+    return Band3Result(not reasons, reasons, None, None, recomputed_dwell_s=dwell)
+
+
+def check(
+    event: TriggerEvent,
+    verdict: KinematicsVerdict,
+    tracks_path: Path,
+    rules: RulesConfig | None = None,
+) -> Band3Result:
+    if len(event.involved_track_ids) == 1 and rules is not None:
+        return _check_zone_intrusion(event, verdict, tracks_path, rules)
     if len(event.involved_track_ids) != 2:
         return Band3Result(True, [], None, None)
 

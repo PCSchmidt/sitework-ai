@@ -1,13 +1,13 @@
 # Dataset manifests
 
 One manifest per dataset, clip set, or model weight file the demo or evaluation harnesses use.
-Nothing large is committed to git: the manifests record where each thing came from, its
+Almost nothing large is committed to git: the manifests record where each thing came from, its
 license, and (where it matters for reproducing a published number) a SHA-256 hash to check a
 download against.
 
 | Manifest | What it pins | Hashes |
 | --- | --- | --- |
-| `pexels-demo-clips.yaml` | The stock clips the simulated cameras loop, plus their 1080p transcodes | every used clip and transcode |
+| `pexels-demo-clips.yaml` | The stock clips the simulated cameras loop, plus their 1080p transcodes. The one exception to "not in git": three 720p re-encodes (about 6.4 MB) under `ui/public/showcase/*/video.mp4`, which the hosted demo plays. Pexels' license allows publishing modified versions | every used clip and transcode |
 | `yolo11-weights.yaml` | Ultralytics YOLO11s (default) and YOLO11n detector weights; AGPL-3.0 note | both `.pt` files, checked against the release URLs |
 | `mot17.yaml` | MOT17 pedestrian-tracking benchmark (HF mirror), used for MOTA/IDF1 | mirror commit pinned instead; research-only, never committed |
 | `mendeley-construction.yaml` | Construction-machinery detection frames (CC BY 4.0) | archive hash |

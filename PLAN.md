@@ -7,7 +7,7 @@ A hybrid deterministic/probabilistic computer vision system for warehouses and c
 | --- | --- |
 | Project | SiteWatch AI (`sitework-ai`) |
 | Type | Portfolio / reference-architecture project (no live cloud deployment required) |
-| Status | M0–M6 closed (see `docs/12-roadmap.md`). Known, disclosed gaps are listed there and in docs/02 §1 |
+| Status | M0–M7 closed (see `docs/12-roadmap.md`); live demo at <https://pcschmidt.github.io/sitework-ai/>. Known, disclosed gaps are listed there and in docs/02 §1 |
 | Source of idea | `project_concepts_ideas.md` (Gemini conversation, summarized in [docs/01-vision-and-scope.md](docs/01-vision-and-scope.md)) |
 | Existing IaC artifact | `SiteWatch AI - AWS ECS Fargate & EFS Terraform Configuration.pdf` (full AWS Terraform spec) |
 
@@ -172,12 +172,13 @@ Full register: [docs/11-risks.md](docs/11-risks.md). Prime Agent embedding feasi
 
 M0's original bootstrap checklist (repo skeleton, dataset licensing, first detector/tracker wire-up)
 is long done -- superseded here rather than left stale; see `docs/12-roadmap.md` for the full
-milestone-by-milestone history. As of 2026-09-26, M0–M6 are all closed; nothing is required to
+milestone-by-milestone history. As of 2026-09-27, M0–M7 are all closed (M7 added the camera overlay and the hosted demo); nothing is required to
 call the project complete. Optional future work, none of it part of any milestone's exit:
 
 1. Stream watchdog + parameter-reviewer sub-agents (docs/05 §1, optional since M0.5).
 2. A genuine cold-boot (not idle-recovered) rerun of the M5 multi-stream benchmark matrix for an
    even cleaner S2 best-case number.
 3. Any of the disclosed gaps in docs/02 §1 and docs/04 §2 (Shift Synthesizer, video overlay/2D
-   canvas, PPE/forklift fine-tunes, INT8), plus real per-camera calibration of the demo cameras.
+   canvas fed live via `frame.ticker`, PPE/forklift fine-tunes, INT8), plus surveyed (rather
+   than estimated) calibration of the demo cameras.
 4. Helm chart (stretch, descoped from M6).

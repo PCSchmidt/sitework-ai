@@ -56,6 +56,13 @@ fixtures into the real Postgres/API/WebSocket path with no GPU and no LLM call. 
 hosted anywhere**, the free-tier hosting in the table below was never set up, and the on-demand
 "Trigger Incident Audit" button was not built. The table is the plan for hosting it.
 
+**As built (M7):** a narrower pattern is hosted, at $0: the dashboard alone, as a static GitHub
+Pages build (<https://pcschmidt.github.io/sitework-ai/>, `.github/workflows/pages.yaml`). It has
+no backend at all. It plays recorded camera clips with their per-frame pipeline output and the
+records of real agent runs, all produced offline (`make showcase`, `make showcase-agent`; the two
+incidents cost about $0.004 in inference, plus about $0.004 for the reruns M7 documents). Nothing
+on the page calls an API or an LLM, so it can't run up a bill.
+
 | Component | Tool | Cost |
 | --- | --- | --- |
 | Dashboard UI | Vercel / Cloudflare Pages | $0 |

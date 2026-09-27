@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchKpis } from '../api'
+import { STATIC_DEMO } from '../config'
 import type { Kpis } from '../types'
 
 export function KpiBar() {
@@ -8,6 +9,7 @@ export function KpiBar() {
   useEffect(() => {
     const load = () => fetchKpis(24).then(setKpis).catch(() => setKpis(null))
     load()
+    if (STATIC_DEMO) return
     const id = window.setInterval(load, 30_000)
     return () => window.clearInterval(id)
   }, [])
@@ -15,10 +17,12 @@ export function KpiBar() {
   if (!kpis) return null
 
   const cards: Array<[string, number]> = [
-    ['Total (24h)', kpis.total_incidents],
+    [STATIC_DEMO ? 'Incidents (recorded)' : 'Total (24h)', kpis.total_incidents],
     ['Confirmed', kpis.by_state['confirmed'] ?? 0],
     ['Needs review', kpis.by_state['needs_review'] ?? 0],
+    ['Violation', kpis.by_classification['violation'] ?? 0],
     ['Near-miss', kpis.by_classification['near_miss'] ?? 0],
+    ['Normal ops', kpis.by_classification['normal_ops'] ?? 0],
   ]
 
   return (

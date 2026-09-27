@@ -13,6 +13,13 @@ const SEVERITY_COLOR: Record<string, string> = {
   low: 'bg-slate-500',
 }
 
+const CLASSIFICATION_STYLE: Record<string, string> = {
+  violation: 'bg-red-600/80 text-white',
+  near_miss: 'bg-orange-500/80 text-white',
+  normal_ops: 'bg-emerald-700/70 text-emerald-50',
+  false_positive: 'bg-slate-600 text-slate-100',
+}
+
 function formatTs(ts: number): string {
   return new Date(ts * 1000).toLocaleString()
 }
@@ -72,7 +79,23 @@ export function IncidentList({
               <span className={`w-2 h-2 rounded-full ${SEVERITY_COLOR[incident.severity] ?? 'bg-slate-500'}`} />
               <span className="font-mono text-xs text-slate-400 truncate">{incident.event_id}</span>
             </div>
-            <div className="text-sm mt-1">{incident.camera_id}</div>
+            <div className="flex items-center justify-between gap-2 mt-1">
+              <span className="text-sm">{incident.camera_id}</span>
+              {incident.classification && (
+                <span
+                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                    CLASSIFICATION_STYLE[incident.classification] ?? 'bg-slate-700'
+                  }`}
+                >
+                  {incident.classification.replace('_', ' ')}
+                </span>
+              )}
+            </div>
+            {incident.rule_citations[0] && (
+              <div className="font-mono text-[11px] text-slate-500 truncate">
+                {incident.rule_citations[0]}
+              </div>
+            )}
             <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
               <span>{formatTs(incident.trigger_ts)}</span>
               <span

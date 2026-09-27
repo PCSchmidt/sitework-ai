@@ -9,6 +9,25 @@ rules:
     radius_m: 3.0
     duration_s: 2.0
     cooldown_s: 120
+  # Warning tier around the same hazard: site policy keeps pedestrians 5 m from
+  # operating mobile plant. Deliberately conservative -- the slow plane verifies
+  # the real distance and decides violation / near miss / normal operations.
+  - id: exclusion_mobile_plant_dock
+    kind: proximity
+    description: Pedestrian inside the 5 m exclusion zone around an operating forklift.
+    citation: SITE-POLICY-3.3 (mobile plant 5 m exclusion zone, warning tier)
+    severity: medium
+    zone_ids: [dock_north]
+    radius_m: 5.0
+    duration_s: 2.0
+    cooldown_s: 120
+  - id: intrusion_forklift_aisle
+    kind: zone_intrusion
+    description: Pedestrian inside a forklift-only aisle beyond the dwell limit.
+    citation: SITE-POLICY-3.2 (forklift-only aisles, no pedestrian entry)
+    zone_ids: [cross_aisle_west]
+    dwell_s: 3.0
+    cooldown_s: 120
   - id: intrusion_excavator_swing
     kind: zone_intrusion
     description: Person inside the active excavator swing radius beyond the dwell limit.

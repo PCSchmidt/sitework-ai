@@ -485,6 +485,8 @@ and what an RLM is. Findings, all now documented in the docs named:
   positions empty, so on the three demo clips the full stack detects and tracks but no rule can
   fire. The incident path has been verified via fixtures, the smoke test, and replay mode, not
   end to end from a demo camera (README Limitations, PLAN.md S1).
+  **Resolved in M7** (below): two demo cameras are now calibrated and fire rules, end to end
+  through the real agent.
 - **A fresh clone can't run `make up`**: clips, weights, and the prime-agent package are all
   outside git, and the vision containers mount `data/models` read-only, so they can't
   auto-download weights. Setup steps are now in the README Quickstart and the clip/weight
@@ -499,10 +501,82 @@ and what an RLM is. Findings, all now documented in the docs named:
   the smoke test isn't in CI (docs/09 §6); no red-team tests exist (below, docs/11 R9); the
   feasibility doc's "the agent that built the system" framing was inaccurate.
 
-Code-level follow-ups surfaced but not changed in this pass: bind published ports to
-`127.0.0.1`; an alarm consumer on `trigger_events`; calibrate the demo cameras (needs real
-measurements); `api/main.py`'s camera-health response still says the watchdog is "not yet wired
-(M5)".
+## M7 — Visual showcase & hosted demo (2026-09-27)
+
+Goal: let a visitor with no install *see* the computer vision work (boxes, tracks, zones, a rule
+firing) and the dual-plane verdict, at a public URL.
+
+- [x] **Offline recorder** (`pipelines/vision/record.py`): runs the live loop's own per-frame code
+      (`build_tracks`, extracted from `pipeline.run_stream` so both share it) over every frame of
+      a clip, with the RuleEngine at the live `PUBLISH_HZ`, and writes `showcase.json` (per-frame
+      tracks, zones in pixels and meters, calibration, rules, events) plus a 720p web video. With
+      `--evidence-dir` it also writes each trigger's live-format evidence folder (`EvidenceCapture`
+      + `event.json`).
+- [x] **Real slow plane on the recorded incidents** (`scripts/showcase_agent.py`): drives
+      `AgentWorker.process_one` against the real `prime-agent`, gate included; saves the
+      `IncidentRecord`s the static dashboard shows. `make showcase` / `make showcase-agent`.
+- [x] **Demo camera calibration**, two new tools:
+  - `pipelines/geometry/level_camera.py`, `calibrate --method level_camera`: for a camera looking
+    straight down an aisle, where the vanishing-point method's second ground vanishing point sits
+    at infinity. The depth vanishing point is fitted from traced lines (its line-fit residual is
+    the gated `rms_px`); camera height and focal length are recorded assumptions with sources.
+    `dock_north_01`: 11 line-detector segments, 1.21 px, **passes**. Scale is 1.40 m camera height
+    from two independent estimates, the forklift's 0.98 m rear track and the worker's height
+    (1.34 vs 1.46–1.50 m). The rear track reprojects to 1.02 m. `warehouse_aisle_01`: no
+    measurable lines, so the vanishing point is *assumed* and the calibration is recorded as
+    unmeasured. It fails the gate on purpose and runs zone-only.
+  - `pipelines/geometry/motion.py`: the dock clip is handheld and drifts up to 65 px against the
+    calibration frame. Each frame is mapped back onto it with an ORB + RANSAC image homography
+    (~780 inliers per frame) composed into the calibration (`Calibration.for_frame`). Wired into
+    the live pipeline too, whenever a calibration names its `reference_image`.
+- [x] **Dashboard**: *Cameras* tab with a canvas overlay drawn per video frame from the recording:
+      boxes and labels, trails, zones warped with the camera motion, and the live worker–vehicle
+      distance. Hover shows floor position and speed. There's a rule-fired banner with
+      pause-on-rule, a timeline with firing markers, and a top-down floor plan. The *Incidents*
+      view plays an incident's clip cued before its trigger and puts the fast plane's
+      measurement, the agent's verdict and the gate's recheck side by side.
+      `VITE_STATIC_DEMO=1` builds a server-less version; `.github/workflows/pages.yaml`
+      publishes it to <https://pcschmidt.github.io/sitework-ai/>.
+- [x] **Result**: dock, the 5 m warning fires at 4.20 m; the agent recomputes 4.20 m and returns
+      `normal_ops`; confirmed. Aisle, the zone rule fires after 3.0 s; the agent returns
+      `violation`; confirmed. Yard: detection only (below).
+
+**Findings, all fixed with tests unless noted:**
+
+- **Cooldowns were keyed by rule *kind*, not rule id** (`RuleEngine._cooldown_key`), contrary to
+  docs/04 §4's "same rule+tracks". Adding a 5 m warning tier next to the 3 m rule exposed it: a
+  warning firing first would have muted a real 3 m breach by the same pair for 120 s. Now keyed
+  by rule id (`cooldown_key` format `camera:rule_id:tracks`, docs/06 §2).
+- **Speed rules applied to pedestrians.** `speed_limit_dock` ("Vehicle exceeding...") fired on a
+  walking worker. Speed rules now skip non-vehicle classes.
+- **Speed was a single 0.1 s finite difference.** At 18 m range one pixel of box jitter is about
+  7 cm, so a ~1 m/s walk read up to 3–6 m/s at the 90th percentile, and a new forklift track
+  briefly read 2.5 m/s. Velocity is now the displacement over a ~1 s window, reported only once
+  at least 0.5 s of history exists (`pipeline.VELOCITY_WINDOW_S`).
+- **The agent misclassified a clear intrusion, and the gate couldn't catch it.** First run on the
+  aisle incident: `false_positive`, although track 9 is in the zone for about 8 s of the window
+  (the rule fired at a dwell of 2.9999998 s from float epoch math, a plausible trigger for a
+  strict recheck; the transcript wasn't captured). Two later runs on identical evidence returned
+  `violation`. Band-3 only checked proximity, so zone verdicts passed on schema alone (docs/06
+  §3). **Fixed:** the gate now recomputes the continuous in-zone dwell at the trigger and rejects
+  `violation` without it or `false_positive` despite it (0.2 s tolerance). The fast path's own
+  `duration_s` claim is deliberately not gated, so the six zone eval fixtures, where the agent
+  must refute a wrong fast-path claim, still reach `confirmed`. That is asserted per fixture in
+  `tests/test_band3.py`. The showcase record is from a fresh run under the new gate.
+- **No genuine close call in the footage.** The dock worker's closest approach to the forklift is
+  4.2 m, so the existing 3 m rule correctly never fires. The demo site adds a conservative 5 m
+  warning tier (`exclusion_mobile_plant_dock`, severity `medium`, via a new optional per-rule
+  `severity` in `rules.yaml`). The existing 3 m rule and its fixtures are unchanged. Stated as a
+  choice in the README.
+- **Detector blind spots on display** (not fixed): COCO has no excavator class, so on
+  `yard_excavator_01` only the cab operator is boxed. It's shown as a labelled "detection only"
+  camera rather than hidden. The overhead `excavator_site_02` clip was rejected as a demo camera
+  because it's a timelapse (tracks fragment into 40+ IDs in 10 s).
+
+Code-level follow-ups surfaced but not changed in the post-M6 pass: bind published ports to
+`127.0.0.1`; an alarm consumer on `trigger_events`; `api/main.py`'s camera-health response still
+says the watchdog is "not yet wired (M5)". (Demo-camera calibration: done in M7.)
+
 
 ## Ongoing habits
 - Weekly: one merged demoable increment; keep `docs/spikes/` for any 1–2 day investigations.

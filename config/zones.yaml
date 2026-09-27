@@ -1,18 +1,24 @@
-# Ground-plane zones in meters (docs/06 §7). Polygons are filled by the calibration
-# tool workflow (make calib); values below are plausible placeholders for the demo site plan.
+# Ground-plane zones in meters (docs/06 §7), in each camera's own calibrated ground
+# frame. dock_north_01 and warehouse_aisle_01 are calibrated against their demo clips;
+# yard_excavator_01's polygon is still a placeholder (no calibration yet).
 zones:
+  # dock_north_01 is calibrated (config/calibration/dock_north_01.json, level_camera
+  # method): world origin on the floor below the camera, +Y down the aisle, +X right.
+  # The apron covers the visible floor from ~8 m to 30 m out.
   - id: dock_north
     camera_id: dock_north_01
     kind: dock_apron
     active: true
     min_calibration_quality: 2.0
-    polygon_m: [[0.0, 0.0], [20.0, 0.0], [20.0, 12.0], [0.0, 12.0]]
-  - id: pedestrian_walkway_north
-    camera_id: dock_north_01
-    kind: pedestrian_walkway
+    polygon_m: [[-7.0, 8.0], [7.0, 8.0], [7.0, 30.0], [-7.0, 30.0]]
+  # warehouse_aisle_01 (config/calibration/warehouse_aisle_01.json, zone-only):
+  # the cross-aisle between the near rack ends (~3.2 m) and the far pallet row (~6.4 m).
+  - id: cross_aisle_west
+    camera_id: warehouse_aisle_01
+    kind: forklift_aisle
     active: true
     min_calibration_quality: 2.0
-    polygon_m: [[0.0, 12.0], [20.0, 12.0], [20.0, 15.0], [0.0, 15.0]]
+    polygon_m: [[-4.0, 3.2], [4.0, 3.2], [4.0, 6.4], [-4.0, 6.4]]
   - id: excavator_swing_radius
     camera_id: yard_excavator_01
     kind: swing_radius

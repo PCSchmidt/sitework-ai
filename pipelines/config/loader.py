@@ -13,6 +13,8 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from pipelines.schemas import Severity
+
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
 
 
@@ -65,6 +67,9 @@ class Rule(BaseModel):
     description: str
     zone_ids: list[str] = []
     citation: str | None = None
+    # Overrides RuleEngine's per-kind default (pipelines.vision.rules.DEFAULT_SEVERITY),
+    # e.g. a wide warning-tier proximity radius next to a tighter high-severity one.
+    severity: Severity | None = None
     radius_m: float | None = Field(default=None, gt=0)
     duration_s: float | None = Field(default=None, gt=0)
     dwell_s: float | None = Field(default=None, gt=0)

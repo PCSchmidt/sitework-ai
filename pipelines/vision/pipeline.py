@@ -13,7 +13,9 @@ require a calibration that clears the hard RMS gate
 stay null and RuleEngine skips proximity/speed evaluation for the frame
 (zone_intrusion still runs off zone_ids) -- the degrade-to-zone-only
 behavior docs/04 §3 describes. No calibration at all: everything stays
-null/empty.
+null/empty. A calibration that names its `reference_image` (a camera that
+pans) is composed per frame with a camera-motion estimate
+(`pipelines.geometry.motion`) before projecting.
 
 Each TrackletFrame is also run through pipelines.vision.rules.RuleEngine;
 any resulting TriggerEvents are published to the `trigger_events` stream
@@ -27,7 +29,10 @@ via pipelines.broker.streams.trim_to_retention (docs/02 §2/§6).
 from __future__ import annotations
 
 import time
+from collections import deque
+from typing import Any
 
+import cv2
 import redis
 
 from pipelines.broker.streams import (
@@ -39,6 +44,7 @@ from pipelines.broker.streams import (
 )
 from pipelines.config.loader import load_rules, load_zones
 from pipelines.geometry.calibration_store import Calibration, load_calibration
+from pipelines.geometry.motion import MotionCompensator
 from pipelines.geometry.zones import ZoneEngine
 from pipelines.ingestion.frame_source import FrameSource
 from pipelines.schemas import CalibrationQuality, TrackletFrame
@@ -47,6 +53,11 @@ from pipelines.vision.evidence import EvidenceCapture
 from pipelines.vision.rules import RuleEngine
 
 PUBLISH_HZ = 10.0
+# Velocity = ground displacement over the last ~VELOCITY_WINDOW_S of published
+# points, reported only once at least MIN_VELOCITY_BASELINE_S of history exists.
+VELOCITY_WINDOW_S = 1.0
+MIN_VELOCITY_BASELINE_S = 0.5
+GroundHistory = deque[tuple[tuple[float, float], float]]
 # Time-based retention (XTRIM MINID, pipelines.broker.streams) replaced the M1
 # count-based MAXLEN trim; checked periodically rather than on every publish.
 TRIM_INTERVAL_S = 30.0
@@ -55,6 +66,91 @@ TRIM_INTERVAL_S = 30.0
 def _bottom_center(bbox_px: tuple[float, float, float, float]) -> tuple[float, float]:
     x1, _y1, x2, y2 = bbox_px
     return ((x1 + x2) / 2, y2)
+
+
+def build_tracks(
+    result: Any,
+    detector: Detector,
+    camera_id: str,
+    now: float,
+    calibration: Calibration | None,
+    zone_engine: ZoneEngine | None,
+    prev_ground: dict[int, GroundHistory],
+    update_kinematics: bool = True,
+) -> list[dict[str, Any]]:
+    """One Ultralytics tracking result -> TrackletFrame track dicts.
+
+    Shared by the live `run_stream` loop and the offline showcase recorder
+    (`pipelines.vision.record`), so both produce identical tracks from the
+    same frame. `prev_ground` holds each track's recent ground points; velocity
+    is the displacement across that ~VELOCITY_WINDOW_S window (a single
+    publish-interval difference turns a few pixels of box jitter into m/s of
+    fake speed at long range). `update_kinematics=False` projects ground
+    points and zones but leaves velocity null and `prev_ground` untouched
+    (the recorder's between-publish overlay frames).
+    """
+    tracks: list[dict[str, Any]] = []
+    if result.boxes is not None and result.boxes.id is not None:
+        ids = result.boxes.id.cpu().numpy().astype(int)
+        boxes = result.boxes.xyxy.cpu().numpy()
+        confs = result.boxes.conf.cpu().numpy()
+        clss = result.boxes.cls.cpu().numpy().astype(int)
+        for tid, box, conf, cid in zip(ids, boxes, confs, clss, strict=True):
+            cls = COCO_TO_SITEWATCH.get(result.names[cid])
+            if cls is None or conf < detector.confidence_gate:
+                continue
+            track_id = int(tid)
+            bx1, by1, bx2, by2 = (float(v) for v in box)
+            bbox_px: tuple[float, float, float, float] = (bx1, by1, bx2, by2)
+
+            ground_point_m: tuple[float, float] | None = None
+            velocity_mps: tuple[float, float] | None = None
+            speed_mps: float | None = None
+            zone_ids: list[str] = []
+            if calibration is not None:
+                ground_point_m = calibration.homography.apply(_bottom_center(bbox_px))
+                if calibration.quality.valid and update_kinematics:
+                    history = prev_ground.setdefault(track_id, deque())
+                    history.append((ground_point_m, now))
+                    while len(history) > 2 and now - history[1][1] >= VELOCITY_WINDOW_S:
+                        history.popleft()
+                    (px, py), pt = history[0]
+                    dt = now - pt
+                    if dt >= MIN_VELOCITY_BASELINE_S:
+                        vx = (ground_point_m[0] - px) / dt
+                        vy = (ground_point_m[1] - py) / dt
+                        velocity_mps = (vx, vy)
+                        speed_mps = (vx**2 + vy**2) ** 0.5
+                if zone_engine is not None:
+                    zone_ids = zone_engine.zone_ids_containing(camera_id, ground_point_m)
+
+            tracks.append(
+                {
+                    "track_id": track_id,
+                    "cls": cls,
+                    "confidence": float(conf),
+                    "bbox_px": list(bbox_px),
+                    "ground_point_m": ground_point_m,
+                    "velocity_mps": velocity_mps,
+                    "speed_mps": speed_mps,
+                    "state": {"cov_trace": 0.0, "age_frames": 0, "hits": 0},
+                    "zone_ids": zone_ids,
+                    "ppe": {"helmet": None, "vest": None},
+                }
+            )
+    return tracks
+
+
+def motion_compensator_for(calibration: Calibration | None) -> MotionCompensator | None:
+    """A compensator when the calibration names the reference frame it was made on."""
+    if calibration is None or calibration.reference_image is None:
+        return None
+    reference = cv2.imread(str(calibration.reference_image))
+    if reference is None:
+        raise FileNotFoundError(
+            f"calibration reference image not found: {calibration.reference_image}"
+        )
+    return MotionCompensator(reference)
 
 
 def run_stream(
@@ -72,8 +168,9 @@ def run_stream(
     last_publish = 0.0
     last_trim = 0.0
     # per-track previous ground point + timestamp, for finite-difference velocity
-    prev_ground: dict[int, tuple[tuple[float, float], float]] = {}
+    prev_ground: dict[int, GroundHistory] = {}
 
+    motion = motion_compensator_for(calibration)
     source = FrameSource(camera_id, url)
     for frame in source.frames():
         # Ultralytics ByteTrack: persist=True keeps IDs across calls.
@@ -91,53 +188,12 @@ def run_stream(
             continue
         last_publish = now
 
-        tracks = []
-        if result.boxes is not None and result.boxes.id is not None:
-            ids = result.boxes.id.cpu().numpy().astype(int)
-            boxes = result.boxes.xyxy.cpu().numpy()
-            confs = result.boxes.conf.cpu().numpy()
-            clss = result.boxes.cls.cpu().numpy().astype(int)
-            for tid, box, conf, cid in zip(ids, boxes, confs, clss, strict=True):
-                cls = COCO_TO_SITEWATCH.get(result.names[cid])
-                if cls is None or conf < detector.confidence_gate:
-                    continue
-                track_id = int(tid)
-                bx1, by1, bx2, by2 = (float(v) for v in box)
-                bbox_px: tuple[float, float, float, float] = (bx1, by1, bx2, by2)
-
-                ground_point_m: tuple[float, float] | None = None
-                velocity_mps: tuple[float, float] | None = None
-                speed_mps: float | None = None
-                zone_ids: list[str] = []
-                if calibration is not None:
-                    ground_point_m = calibration.homography.apply(_bottom_center(bbox_px))
-                    if calibration.quality.valid:
-                        if track_id in prev_ground:
-                            (px, py), pt = prev_ground[track_id]
-                            dt = now - pt
-                            if dt > 0:
-                                vx = (ground_point_m[0] - px) / dt
-                                vy = (ground_point_m[1] - py) / dt
-                                velocity_mps = (vx, vy)
-                                speed_mps = (vx**2 + vy**2) ** 0.5
-                        prev_ground[track_id] = (ground_point_m, now)
-                    if zone_engine is not None:
-                        zone_ids = zone_engine.zone_ids_containing(camera_id, ground_point_m)
-
-                tracks.append(
-                    {
-                        "track_id": track_id,
-                        "cls": cls,
-                        "confidence": float(conf),
-                        "bbox_px": list(bbox_px),
-                        "ground_point_m": ground_point_m,
-                        "velocity_mps": velocity_mps,
-                        "speed_mps": speed_mps,
-                        "state": {"cov_trace": 0.0, "age_frames": 0, "hits": 0},
-                        "zone_ids": zone_ids,
-                        "ppe": {"helmet": None, "vest": None},
-                    }
-                )
+        frame_calibration = calibration
+        if calibration is not None and motion is not None:
+            frame_calibration = calibration.for_frame(motion.frame_to_reference(frame.image))
+        tracks = build_tracks(
+            result, detector, camera_id, now, frame_calibration, zone_engine, prev_ground
+        )
 
         # Absent/invalid calibration -> rules stay zone-only (docs/04 §3).
         # NOTE: finite sentinel (not inf) — Pydantic JSON-serializes inf as null,
